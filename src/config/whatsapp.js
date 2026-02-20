@@ -5,19 +5,11 @@ let ultimoQR = "";
 
 const client = new Client({
     authStrategy: new LocalAuth(),
-    puppeteer: {
-        headless: true,
-        // 2. O PULO DO GATO: Faz o código achar o Chrome no cache do Render
-        executablePath: puppeteer.executablePath(), 
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-gpu',
-            '--no-zygote',
-            '--single-process'
-        ]
-    }
+   puppeteer: {
+    headless: true,
+    executablePath: '/usr/bin/google-chrome',
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+}
 });
 
 // Eventos do Cliente
