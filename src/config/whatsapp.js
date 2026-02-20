@@ -7,13 +7,14 @@ const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
+        // REMOVEMOS a linha do executablePath: '/usr/bin/google-chrome'
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
-            '--disable-gpu'
+            '--disable-gpu',
+            '--no-zygote'
         ]
-        // DEIXE SEM O executablePath PARA ELE USAR O PADRÃO DO CACHE
     }
 });
 
