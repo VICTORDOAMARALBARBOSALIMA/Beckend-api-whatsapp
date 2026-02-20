@@ -7,16 +7,13 @@ const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
-        // O Render precisa desses args para não travar
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
-            '--disable-gpu',
-            '--no-zygote'
-        ],
-        // No Render, o Chrome fica nesta pasta. No Windows, ele ignora se não achar.
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome'
+            '--disable-gpu'
+        ]
+        // DEIXE SEM O executablePath PARA ELE USAR O PADRÃO DO CACHE
     }
 });
 
