@@ -1,19 +1,57 @@
-FROM ghcr.io/puppeteer/puppeteer:21.5.0
+FROM node:18-slim
 
-# Define o diretório de trabalho
+# Instala dependências para o Puppeteer/Chromium
+RUN apt-get update && apt-get install -y \
+    gconf-service \
+    libasound2 \
+    libatk1.0-0 \
+    libc6 \
+    libcairo2 \
+    libcups2 \
+    libdbus-1-3 \
+    libexpat1 \
+    libfontconfig1 \
+    libgcc1 \
+    libgconf-2-4 \
+    libgdk-pixbuf2.0-0 \
+    libglib2.0-0 \
+    libgtk-3-0 \
+    libnspr4 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libstdc++6 \
+    libx11-6 \
+    libx11-xcb1 \
+    libxcb1 \
+    libxcomposite1 \
+    libcursor1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxi6 \
+    libxrandr2 \
+    libxrender1 \
+    libxss1 \
+    libxtst6 \
+    ca-certificates \
+    fonts-liberation \
+    libappindicator1 \
+    libnss3 \
+    lsb-release \
+    xdg-utils \
+    wget \
+    --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
-# Copia os arquivos de dependências
 COPY package*.json ./
-
-# Instala as dependências (sem baixar o chrome de novo, pois já está na imagem)
 RUN npm install
 
-# Copia o restante do código
 COPY . .
 
-# Expõe a porta que o Render usa
-EXPOSE 10000
+# Expõe a porta que sua API usa
+EXPOSE 3000
 
-# Comando para iniciar a API
-CMD ["node", "server.js"]
+# Comando para rodar a aplicação
+CMD ["npm", "start"]
