@@ -3,10 +3,8 @@ const whatsappConfig = require('../config/whatsapp');
 const axios = require('axios');
 
 async function enviarMensagemAPI(numero, texto) {
-    // 1. Limpa o número
     let jid = numero.trim();
     
-    // 2. Se o número não tiver @, a gente adiciona o padrão de contato
     if (!jid.includes('@')) {
         jid = `${jid.replace(/\D/g, '')}@s.whatsapp.net`;
     }
@@ -14,15 +12,16 @@ async function enviarMensagemAPI(numero, texto) {
     console.log(`🚀 Tentando enviar para JID: ${jid}`);
 
     try {
+        // Ajustado para o padrão que sua instância exige: textMessage
         await axios.post(`${whatsappConfig.baseUrl}/message/sendText/${whatsappConfig.instance}`, {
-            number: jid, // A Evolution aceita o JID completo aqui
-            text: texto,
-            linkPreview: false
+            number: jid,
+            textMessage: {
+                text: texto
+            }
         }, { headers: whatsappConfig.headers });
         
         return true;
     } catch (error) {
-        // O erro 400 vai ser detalhado aqui
         console.error(`❌ Erro Evolution API (${jid}):`, 
             JSON.stringify(error.response?.data || error.message, null, 2)
         );
