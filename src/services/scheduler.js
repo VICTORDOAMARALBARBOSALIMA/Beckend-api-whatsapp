@@ -30,14 +30,14 @@ Podemos confirmar?`;
 }
 
 const verificarEEnviarTudo = async () => {
-    console.log("--- 🕵️ VIGIA FORMULAPÉ EM AÇÃO (Tabela: lembretes) ---");
+    console.log("--- 🕵️ VIGIA FORMULAPÉ EM AÇÃO (Tabela: lembretes_novos) ---");
     const agora = new Date();
     const limiteAmanha = new Date(agora.getTime() + (24 * 60 * 60 * 1000)); 
 
     try {
        const { data: lembretes, error } = await supabase
         .schema('public')
-        .from('lembretes')
+        .from('lembretes_novos') // <--- MUDE AQUI
         .select('*')
         .eq('status_lembrete', 'pendente')
         .lte('data_hora', limiteAmanha.toISOString()) 
@@ -55,7 +55,7 @@ const verificarEEnviarTudo = async () => {
                 
                 if (enviado) {
                     await supabase
-                        .from('lembretes')
+                        .from('lembretes_novos') // <--- MUDE AQUI TAMBÉM
                         .update({ status_lembrete: 'enviado' })
                         .eq('id', ag.id);
                     console.log(`✅ Lembrete enviado para: ${ag.paciente_nome}`);
