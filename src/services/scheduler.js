@@ -7,10 +7,12 @@ async function enviarMensagemAPI(numero, texto) {
     try {
         await axios.post(`${whatsappConfig.baseUrl}/message/sendText/${whatsappConfig.instance}`, {
             number: formattedNumber,
-            text: texto
+            text: texto,
+            linkPreview: false // Desativa prévia de link para evitar erro 400
         }, { headers: whatsappConfig.headers });
         return true;
     } catch (error) {
+        // Log detalhado para sabermos o que a Evolution respondeu
         console.error(`❌ Erro Evolution API (${numero}):`, error.response?.data || error.message);
         return false;
     }
@@ -37,7 +39,7 @@ const verificarEEnviarTudo = async () => {
 
     try {
         const { data: lembretes, error } = await supabase
-            .from('"lembretes_final"') 
+            .from('lembretes_final') 
             .select('*')
             .eq('status_lembrete', 'pendente') 
             .lte('data_hora', limiteAmanha.toISOString()) 
@@ -56,7 +58,7 @@ const verificarEEnviarTudo = async () => {
                 
                 if (enviado) {
                     await supabase
-                        .from('"lembretes_final"')
+                        .from('lembretes_final')
                         .update({ status_lembrete: 'enviado' })
                         .eq('id', ag.id);
                     console.log(`✅ Lembrete enviado para: ${ag.paciente_nome}`);
