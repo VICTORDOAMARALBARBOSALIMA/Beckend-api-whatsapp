@@ -11,54 +11,50 @@ async function enviarMensagemAPI(numero, texto) {
         }, { headers: whatsappConfig.headers });
         return true;
     } catch (error) {
-        console.error(`❌ Erro ao disparar para ${numero}:`, error.response?.data || error.message);
+        console.error(`❌ Erro Evolution API (${numero}):`, error.response?.data || error.message);
         return false;
     }
 }
 
-function formatarMensagem(template, agendamento) {
-    if (!template) return `Olá ${agendamento.paciente_nome}! Passando para lembrar da sua consulta.`;
+function formatarMensagem(agendamento) {
+    // Texto fixo para teste - depois você pode voltar a usar templates do banco
     const dataObj = new Date(agendamento.data_hora);
-    return template
-        .replace(/{nome}/g, agendamento.paciente_nome)
-        .replace(/{data}/g, dataObj.toLocaleDateString('pt-BR'))
-        .replace(/{hora}/g, dataObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
-        .replace(/{servico}/g, agendamento.serviço || "Atendimento");
+    const dataFormatada = dataObj.toLocaleDateString('pt-BR');
+    const horaFormatada = dataObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    return `Olá ${agendamento.paciente_nome}! 
+Passando para confirmar seu horário de ${agendamento.serviço || 'atendimento'} na FormulaPé.
+🗓️ Data: ${dataFormatada}
+⏰ Hora: ${horaFormatada}
+Podemos confirmar?`;
 }
 
 const verificarEEnviarTudo = async () => {
-    console.log("--- 🕵️ VIGIA FORMULAPÉ EM AÇÃO ---");
+    console.log("--- 🕵️ VIGIA FORMULAPÉ EM AÇÃO (Tabela: lembretes) ---");
     const agora = new Date();
     const limiteAmanha = new Date(agora.getTime() + (24 * 60 * 60 * 1000)); 
 
     try {
-        // 1. Busca os templates (se não tiver a tabela, isso vai dar erro, veja nota abaixo)
-        const { data: templates } = await supabase.from('templates').select('*');
-
-        // 2. BUSCA COM ASPAS DUPLAS PARA ESCAPAR O NOME DA TABELA
         const { data: lembretes, error } = await supabase
-            .from('"FormulaPe-whatsapp"') // AQUI ESTÁ O PULO DO GATO: '"Nome"'
+            .from('lembretes') // NOME LIMPO E SIMPLES
             .select('*')
             .eq('status_lembrete', 'pendente') 
             .lte('data_hora', limiteAmanha.toISOString()) 
             .gt('data_hora', agora.toISOString());        
 
         if (error) {
-            console.error("❌ Erro ao buscar agendamentos:", error.message);
+            console.error("❌ Erro ao buscar:", error.message);
             return;
         }
 
-        if (lembretes?.length > 0) {
-            // Se você não tiver a tabela templates, vamos usar um texto padrão:
-            const tplLembrete = templates?.find(t => t.slug === 'lembrete_24h')?.conteudo;
-            
+        if (lembretes && lembretes.length > 0) {
             for (let ag of lembretes) {
-                const msg = formatarMensagem(tplLembrete, ag);
+                const msg = formatarMensagem(ag);
                 const enviado = await enviarMensagemAPI(ag.WhatsApp, msg);
                 
                 if (enviado) {
                     await supabase
-                        .from('"FormulaPe-whatsapp"') // ASPAS AQUI TAMBÉM
+                        .from('lembretes')
                         .update({ status_lembrete: 'enviado' })
                         .eq('id', ag.id);
                     console.log(`✅ Lembrete enviado para: ${ag.paciente_nome}`);
@@ -67,7 +63,6 @@ const verificarEEnviarTudo = async () => {
         } else {
             console.log("📌 Nenhum lembrete pendente encontrado.");
         }
-
     } catch (err) {
         console.error("❌ Erro crítico no Vigia:", err.message);
     }
