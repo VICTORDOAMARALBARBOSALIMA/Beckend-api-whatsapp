@@ -16,14 +16,15 @@ async function enviarMensagemAPI(numero, texto) {
     }
 }
 
+// <<< AQUI ESTÁ O AJUSTE DA FORMATAÇÃO >>>
 function formatarMensagem(agendamento) {
-    // Texto fixo para teste - depois você pode voltar a usar templates do banco
     const dataObj = new Date(agendamento.data_hora);
     const dataFormatada = dataObj.toLocaleDateString('pt-BR');
     const horaFormatada = dataObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
+    // Usando agendamento.servico (tudo minúsculo, sem acento)
     return `Olá ${agendamento.paciente_nome}! 
-Passando para confirmar seu horário de ${agendamento.serviço || 'atendimento'} na FormulaPé.
+Passando para confirmar seu horário de ${agendamento.servico || 'atendimento'} na FormulaPé.
 🗓️ Data: ${dataFormatada}
 ⏰ Hora: ${horaFormatada}
 Podemos confirmar?`;
@@ -34,40 +35,40 @@ const verificarEEnviarTudo = async () => {
     const agora = new Date();
     const limiteAmanha = new Date(agora.getTime() + (24 * 60 * 60 * 1000)); 
 
-   // ... dentro da função verificarEEnviarTudo
-try {
-   const { data: lembretes, error } = await supabase
-    .from('lembretes_final') 
-    .select('*')
-    .eq('status_lembrete', 'pendente')
-    .lte('data_hora', limiteAmanha.toISOString()) 
-    .gt('data_hora', agora.toISOString());        
+    try {
+        const { data: lembretes, error } = await supabase
+            .from('lembretes_final') 
+            .select('*')
+            .eq('status_lembrete', 'pendente') 
+            .lte('data_hora', limiteAmanha.toISOString()) 
+            .gt('data_hora', agora.toISOString());        
 
-    if (error) {
-        console.error("❌ Erro ao buscar:", error.message);
-        return;
-    }
-
-    if (lembretes && lembretes.length > 0) {
-        for (let ag of lembretes) {
-            const msg = formatarMensagem(ag);
-            // IMPORTANTE: agora usamos tudo minúsculo conforme o banco
-            const enviado = await enviarMensagemAPI(ag.whatsapp, msg); 
-            
-            if (enviado) {
-                await supabase
-                    .from('lembretes_final')
-                    .update({ status_lembrete: 'enviado' })
-                    .eq('id', ag.id);
-                console.log(`✅ Lembrete enviado para: ${ag.paciente_nome}`);
-            }
+        if (error) {
+            console.error("❌ Erro ao buscar:", error.message);
+            return;
         }
-    } else {
-        console.log("📌 Nenhum lembrete pendente encontrado em lembretes_final.");
+
+        if (lembretes && lembretes.length > 0) {
+            for (let ag of lembretes) {
+                const msg = formatarMensagem(ag);
+                // Usando ag.whatsapp (tudo minúsculo)
+                const enviado = await enviarMensagemAPI(ag.whatsapp, msg);
+                
+                if (enviado) {
+                    await supabase
+                        .from('lembretes_final')
+                        .update({ status_lembrete: 'enviado' })
+                        .eq('id', ag.id);
+                    console.log(`✅ Lembrete enviado para: ${ag.paciente_nome}`);
+                }
+            }
+        } else {
+            console.log("📌 Nenhum lembrete pendente encontrado em lembretes_final.");
+        }
+
+    } catch (err) {
+        console.error("❌ Erro crítico no Vigia:", err.message);
     }
-} catch (err) {
-    console.error("❌ Erro crítico no Vigia:", err.message);
-}
 };
 
 module.exports = { verificarEEnviarTudo };
