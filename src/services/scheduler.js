@@ -35,12 +35,13 @@ const verificarEEnviarTudo = async () => {
     const limiteAmanha = new Date(agora.getTime() + (24 * 60 * 60 * 1000)); 
 
     try {
-        const { data: lembretes, error } = await supabase
-            .from('lembretes') // NOME LIMPO E SIMPLES
-            .select('*')
-            .eq('status_lembrete', 'pendente') 
-            .lte('data_hora', limiteAmanha.toISOString()) 
-            .gt('data_hora', agora.toISOString());        
+       const { data: lembretes, error } = await supabase
+        .schema('public')
+        .from('lembretes')
+        .select('*')
+        .eq('status_lembrete', 'pendente')
+        .lte('data_hora', limiteAmanha.toISOString()) 
+        .gt('data_hora', agora.toISOString());        
 
         if (error) {
             console.error("❌ Erro ao buscar:", error.message);
