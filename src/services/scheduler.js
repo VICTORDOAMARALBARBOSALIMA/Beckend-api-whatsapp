@@ -27,44 +27,49 @@ function formatarMensagem(template, agendamento) {
 }
 
 const verificarEEnviarTudo = async () => {
-    console.log("--- 🕵️ VIGIA FORMULAPÉ EM AÇÃO (Tabela: FormulaPe-whatsapp) ---");
+    console.log("--- 🕵️ VIGIA FORMULAPÉ EM AÇÃO ---");
     const agora = new Date();
     const limiteAmanha = new Date(agora.getTime() + (24 * 60 * 60 * 1000)); 
 
     try {
-        // 1. Busca os templates (assumindo que você tem uma tabela 'templates')
+        // 1. Busca os templates (se não tiver a tabela, isso vai dar erro, veja nota abaixo)
         const { data: templates } = await supabase.from('templates').select('*');
 
-        // 2. Busca na tabela CORRETA: FormulaPe-whatsapp
-        const { data: lembretes, error } = await supabase.from('FormulaPe-whatsapp')
+        // 2. BUSCA COM ASPAS DUPLAS PARA ESCAPAR O NOME DA TABELA
+        const { data: lembretes, error } = await supabase
+            .from('"FormulaPe-whatsapp"') // AQUI ESTÁ O PULO DO GATO: '"Nome"'
             .select('*')
-            .eq('status_lembrete', 'pendente') // Nome da sua coluna
+            .eq('status_lembrete', 'pendente') 
             .lte('data_hora', limiteAmanha.toISOString()) 
             .gt('data_hora', agora.toISOString());        
 
-        if (error) throw error;
+        if (error) {
+            console.error("❌ Erro ao buscar agendamentos:", error.message);
+            return;
+        }
 
         if (lembretes?.length > 0) {
+            // Se você não tiver a tabela templates, vamos usar um texto padrão:
             const tplLembrete = templates?.find(t => t.slug === 'lembrete_24h')?.conteudo;
             
             for (let ag of lembretes) {
                 const msg = formatarMensagem(tplLembrete, ag);
-                // Note que aqui usamos ag.WhatsApp (com W e A maiúsculos como você descreveu)
                 const enviado = await enviarMensagemAPI(ag.WhatsApp, msg);
                 
                 if (enviado) {
-                    await supabase.from('FormulaPe-whatsapp')
+                    await supabase
+                        .from('"FormulaPe-whatsapp"') // ASPAS AQUI TAMBÉM
                         .update({ status_lembrete: 'enviado' })
-                        .eq('id', ag.id); // Certifique-se que o nome da coluna de ID é 'id'
+                        .eq('id', ag.id);
                     console.log(`✅ Lembrete enviado para: ${ag.paciente_nome}`);
                 }
             }
         } else {
-            console.log("📌 Nenhum lembrete pendente para as próximas 24h.");
+            console.log("📌 Nenhum lembrete pendente encontrado.");
         }
 
     } catch (err) {
-        console.error("❌ Erro no Vigia:", err.message);
+        console.error("❌ Erro crítico no Vigia:", err.message);
     }
 };
 
