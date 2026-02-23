@@ -37,7 +37,7 @@ const verificarEEnviarTudo = async () => {
 
     try {
         const { data: lembretes, error } = await supabase
-            .from('lembretes_final') 
+            .from('"lembretes_final"') 
             .select('*')
             .eq('status_lembrete', 'pendente') 
             .lte('data_hora', limiteAmanha.toISOString()) 
@@ -56,7 +56,7 @@ const verificarEEnviarTudo = async () => {
                 
                 if (enviado) {
                     await supabase
-                        .from('lembretes_final')
+                        .from('"lembretes_final"')
                         .update({ status_lembrete: 'enviado' })
                         .eq('id', ag.id);
                     console.log(`✅ Lembrete enviado para: ${ag.paciente_nome}`);
