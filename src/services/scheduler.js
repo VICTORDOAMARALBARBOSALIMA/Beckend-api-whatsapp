@@ -30,43 +30,44 @@ Podemos confirmar?`;
 }
 
 const verificarEEnviarTudo = async () => {
-    console.log("--- 🕵️ VIGIA FORMULAPÉ EM AÇÃO (Tabela: lembretes_novos) ---");
+    console.log("--- 🕵️ VIGIA FORMULAPÉ EM AÇÃO (Tabela: lembretes_final) ---");
     const agora = new Date();
     const limiteAmanha = new Date(agora.getTime() + (24 * 60 * 60 * 1000)); 
 
-    try {
-       const { data: lembretes, error } = await supabase
-        .schema('public')
-        .from('lembretes_novos') // <--- MUDE AQUI
-        .select('*')
-        .eq('status_lembrete', 'pendente')
-        .lte('data_hora', limiteAmanha.toISOString()) 
-        .gt('data_hora', agora.toISOString());        
+   // ... dentro da função verificarEEnviarTudo
+try {
+   const { data: lembretes, error } = await supabase
+    .from('lembretes_final') 
+    .select('*')
+    .eq('status_lembrete', 'pendente')
+    .lte('data_hora', limiteAmanha.toISOString()) 
+    .gt('data_hora', agora.toISOString());        
 
-        if (error) {
-            console.error("❌ Erro ao buscar:", error.message);
-            return;
-        }
-
-        if (lembretes && lembretes.length > 0) {
-            for (let ag of lembretes) {
-                const msg = formatarMensagem(ag);
-                const enviado = await enviarMensagemAPI(ag.WhatsApp, msg);
-                
-                if (enviado) {
-                    await supabase
-                        .from('lembretes_novos') // <--- MUDE AQUI TAMBÉM
-                        .update({ status_lembrete: 'enviado' })
-                        .eq('id', ag.id);
-                    console.log(`✅ Lembrete enviado para: ${ag.paciente_nome}`);
-                }
-            }
-        } else {
-            console.log("📌 Nenhum lembrete pendente encontrado.");
-        }
-    } catch (err) {
-        console.error("❌ Erro crítico no Vigia:", err.message);
+    if (error) {
+        console.error("❌ Erro ao buscar:", error.message);
+        return;
     }
+
+    if (lembretes && lembretes.length > 0) {
+        for (let ag of lembretes) {
+            const msg = formatarMensagem(ag);
+            // IMPORTANTE: agora usamos tudo minúsculo conforme o banco
+            const enviado = await enviarMensagemAPI(ag.whatsapp, msg); 
+            
+            if (enviado) {
+                await supabase
+                    .from('lembretes_final')
+                    .update({ status_lembrete: 'enviado' })
+                    .eq('id', ag.id);
+                console.log(`✅ Lembrete enviado para: ${ag.paciente_nome}`);
+            }
+        }
+    } else {
+        console.log("📌 Nenhum lembrete pendente encontrado em lembretes_final.");
+    }
+} catch (err) {
+    console.error("❌ Erro crítico no Vigia:", err.message);
+}
 };
 
 module.exports = { verificarEEnviarTudo };
