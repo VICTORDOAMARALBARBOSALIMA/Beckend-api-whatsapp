@@ -46,15 +46,15 @@ Podemos confirmar?`;
 const verificarEEnviarTudo = async () => {
     console.log("--- 🕵️ VIGIA FORMULAPÉ EM AÇÃO (Tabela: lembretes_final) ---");
     const agora = new Date();
-    const limiteAmanha = new Date(agora.getTime() + (24 * 60 * 60 * 1000)); 
 
     try {
+        // BUSCA: Agora usando os nomes corretos (status e data_envio)
+        // Removido o .gt para pegar também o que está atrasado
         const { data: lembretes, error } = await supabase
             .from('lembretes_final') 
             .select('*')
-            .eq('status_lembrete', 'pendente') 
-            .lte('data_hora', limiteAmanha.toISOString()) 
-            .gt('data_hora', agora.toISOString());        
+            .eq('status', 'pendente') 
+            .lte('data_envio', agora.toISOString()); // Pega tudo de AGORA para TRÁS
 
         if (error) {
             console.error("❌ Erro ao buscar:", error.message);
@@ -62,25 +62,30 @@ const verificarEEnviarTudo = async () => {
         }
 
         if (lembretes && lembretes.length > 0) {
+            console.log(`📦 Encontrados ${lembretes.length} lembretes para processar.`);
+            
             for (let ag of lembretes) {
                 const msg = formatarMensagem(ag);
-                // Usando ag.whatsapp (tudo minúsculo)
-                const enviado = await enviarMensagemAPI(ag.whatsapp, msg);
+                
+                // CORREÇÃO: Usando ag.telefone que é o nome novo da coluna
+                const numeroParaEnvio = ag.telefone; 
+                
+                const enviado = await enviarMensagemAPI(numeroParaEnvio, msg);
                 
                 if (enviado) {
+                    // CORREÇÃO: Atualizando a coluna 'status' (não status_lembrete)
                     await supabase
                         .from('lembretes_final')
-                        .update({ status_lembrete: 'enviado' })
+                        .update({ status: 'enviado' })
                         .eq('id', ag.id);
-                    console.log(`✅ Lembrete enviado para: ${ag.paciente_nome}`);
+                    console.log(`✅ Lembrete enviado para o número: ${numeroParaEnvio}`);
                 }
             }
         } else {
-            console.log("📌 Nenhum lembrete pendente encontrado em lembretes_final.");
+            console.log("📌 Nenhum lembrete pendente encontrado para o horário atual.");
         }
-
     } catch (err) {
-        console.error("❌ Erro crítico no Vigia:", err.message);
+        console.error("🔥 Erro inesperado no Vigia:", err);
     }
 };
 
