@@ -31,13 +31,24 @@ async function enviarMensagemAPI(numero, texto) {
 
 // <<< AQUI ESTÁ O AJUSTE DA FORMATAÇÃO >>>
 function formatarMensagem(agendamento) {
-    const dataObj = new Date(agendamento.data_hora);
-    const dataFormatada = dataObj.toLocaleDateString('pt-BR');
-    const horaFormatada = dataObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    // CORREÇÃO: Alterado de data_hora para data_envio
+    const dataObj = new Date(agendamento.data_envio);
     
-    // Usando agendamento.servico (tudo minúsculo, sem acento)
-    return `Olá ${agendamento.paciente_nome}! 
-Passando para confirmar seu horário de ${agendamento.servico || 'atendimento'} na FormulaPé.
+    // Validação para garantir que a data é um objeto válido
+    const dataFormatada = !isNaN(dataObj) 
+        ? dataObj.toLocaleDateString('pt-BR') 
+        : "Data pendente";
+        
+    const horaFormatada = !isNaN(dataObj) 
+        ? dataObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) 
+        : "Horário pendente";
+    
+    // Usando os nomes de colunas que vimos nas fotos do seu Supabase
+    const nome = agendamento.paciente_nom || agendamento.paciente_nome || 'Cliente';
+    const servico = agendamento.servico || 'atendimento';
+
+    return `Olá ${nome}! 
+Passando para confirmar seu horário de agendamento.
 🗓️ Data: ${dataFormatada}
 ⏰ Hora: ${horaFormatada}
 Podemos confirmar?`;
