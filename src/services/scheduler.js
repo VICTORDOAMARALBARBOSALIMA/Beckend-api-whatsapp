@@ -19,37 +19,36 @@ async function enviarMensagemAPI(numero, texto) {
 }
 
 async function obterMensagemFormatada(agendamento) {
-    // 1. PRIORIDADE: Mensagem personalizada escrita no agendamento
+    // 1. PRIORIDADE: Mensagem personalizada
     if (agendamento.mensagem_personalizada) {
-        console.log(`📝 Usando mensagem personalizada para: ${agendamento.nome}`);
         return agendamento.mensagem_personalizada; 
     }
 
-    // 2. SEGUNDA OPÇÃO: Busca o template padrão
-    try {
-        const { data: template } = await supabase
-            .from('templates')
-            .select('conteudo')
-            .eq('slug', agendamento.tipo_mensagem || 'confirmacao')
-            .single();
+    // 2. SEGUNDA OPÇÃO: Busca o template padrão usando os slugs novos
+    // slugs esperados: 'confirmation', '24h_before', 'post_appointment'
+    const slugBusca = agendamento.tipo_mensagem === 'confirmacao' ? 'confirmation' : agendamento.tipo_mensagem;
 
-        let textoBase = template?.conteudo || "Olá {{nome}}, confirmamos seu horário de {{servico}} para {{data}} às {{hora}}.";
+    const { data: template } = await supabase
+        .from('templates')
+        .select('conteudo')
+        .eq('slug', slugBusca)
+        .single();
 
-        const dataObj = new Date(agendamento.data_envio);
-        const dataF = !isNaN(dataObj) ? dataObj.toLocaleDateString('pt-BR') : "pendente";
-        // CORREÇÃO AQUI: Adicionado o fallback para evitar o erro de sintaxe
-        const horaF = !isNaN(dataObj) ? dataObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : "pendente";
+    let textoBase = template?.conteudo || "Olá {nome}, confirmamos seu horário dia {data} às {hora}.";
 
-        // 3. Formata o template
-        return textoBase
-            .replace(/{{nome}}/g, agendamento.nome || 'Cliente')
-            .replace(/{{servico}}/g, agendamento.servico || 'atendimento')
-            .replace(/{{data}}/g, dataF)
-            .replace(/{{hora}}/g, horaF);
-            
-    } catch (err) {
-        return `Olá ${agendamento.nome || 'Cliente'}, confirmamos seu atendimento.`;
-    }
+    const dataObj = new Date(agendamento.data_envio);
+    const dataF = !isNaN(dataObj) ? dataObj.toLocaleDateString('pt-BR') : "";
+    const horaF = !isNaN(dataObj) ? dataObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : "";
+
+    // 3. Formata usando {variavel} conforme sua lista
+    return textoBase
+        .replace(/{nome}/g, agendamento.nome || 'Cliente')
+        .replace(/{data}/g, dataF)
+        .replace(/{hora}/g, horaF)
+        .replace(/{servico}/g, agendamento.servico || 'atendimento')
+        // Caso queira adicionar as novas variáveis que o Mocha enviará no futuro:
+        .replace(/{profissional}/g, agendamento.profissional || 'Equipe FormulaPé')
+        .replace(/{link_agendamento}/g, 'https://formulape.com.br'); 
 }
 
 // --- O VIGIA (SCHEDULER) ---
