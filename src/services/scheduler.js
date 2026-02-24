@@ -5,7 +5,6 @@ const axios = require('axios');
 async function enviarMensagemDinamica(numero, texto, instancia, apikey) {
     const numeroLimpo = numero.toString().replace(/\D/g, '');
     try {
-        // ⚠️ USANDO A VARIÁVEL QUE VOCÊ ME MOSTROU AGORA
         const baseUrl = process.env.EVOLUTION_URL; 
         
         if (!baseUrl) {
@@ -24,7 +23,7 @@ async function enviarMensagemDinamica(numero, texto, instancia, apikey) {
 
         await axios.post(url, payload, { 
             headers: { 
-                "apikey": apikey, // O robô usa a apikey do DONO do agendamento (que vem do banco)
+                "apikey": apikey,
                 "Content-Type": "application/json" 
             } 
         });
@@ -44,9 +43,7 @@ async function obterMensagemFormatada(agendamento) {
 
     let textoBase = agendamento.mensagem_personalizada || templatesFixos[agendamento.tipo_mensagem] || templatesFixos['confirmacao'];
 
-    const dataObj = new Date(agendamento.data_envio);
     const dataExibicao = new Date(agendamento.data_envio);
-
     const dataF = dataExibicao.toLocaleDateString('pt-BR');
     const horaF = dataExibicao.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
@@ -58,27 +55,33 @@ async function obterMensagemFormatada(agendamento) {
 }
 
 const verificarEEnviarTudo = async () => {
-    // Agora que TZ = America/Sao_Paulo, o "new Date()" já vem no horário de Brasília!
     const agora = new Date();
-    
-    // Como o banco Supabase salva em UTC, precisamos que a busca use o ISO do momento atual
-    // O .toISOString() sempre manda em UTC, o que é perfeito para comparar com o banco.
     const agoraISO = agora.toISOString();
 
-    console.log(`--- 🕵️ VIGIA MULTI-INSTÂNCIA [${agora.toLocaleString('pt-BR')}] ---`);
-    console.log(`Buscando no banco registros até: ${agoraISO}`);
+    console.log(`--- 🕵️ VIGIA ATIVADO [${agora.toLocaleString('pt-BR')}] ---`);
 
     try {
+        // Buscamos TODOS os registros pendentes
         const { data: lembretes, error } = await supabase
             .from('lembretes_final') 
             .select('*')
-            .eq('status', 'pendente') 
-            .lte('data_envio', agoraISO); // Busca tudo que já passou da hora de enviar
+            .eq('status', 'pendente');
+
         if (error) throw error;
 
-        if (lembretes && lembretes.length > 0) {
-            for (let ag of lembretes) {
-                // BUSCA A INSTÂNCIA DO USUÁRIO NO BANCO
+        if (!lembretes || lembretes.length === 0) {
+            console.log("🔎 Nenhum registro pendente encontrado.");
+            return;
+        }
+
+        for (let ag of lembretes) {
+            // REGRA: Confirmação envia na hora. Outros tipos esperam o horário.
+            const ehConfirmacao = ag.tipo_mensagem === 'confirmacao';
+            const jaPassouDaHora = new Date(ag.data_envio) <= agora;
+
+            if (ehConfirmacao || jaPassouDaHora) {
+                console.log(`🚀 Processando ${ag.tipo_mensagem} para: ${ag.nome}`);
+
                 const { data: conexao } = await supabase
                     .from('usuarios_whatsapp')
                     .select('instance_name, apikey')
@@ -86,7 +89,7 @@ const verificarEEnviarTudo = async () => {
                     .single();
 
                 if (!conexao) {
-                    console.error(`⚠️ Usuário ${ag.user_id} sem WhatsApp conectado.`);
+                    console.error(`⚠️ Sem WhatsApp para o usuário ${ag.user_id}`);
                     continue;
                 }
 
@@ -95,8 +98,10 @@ const verificarEEnviarTudo = async () => {
                 
                 if (enviado) {
                     await supabase.from('lembretes_final').update({ status: 'enviado' }).eq('id', ag.id);
-                    console.log(`✅ [${conexao.instance_name}] Mensagem enviada para: ${ag.nome}`);
+                    console.log(`✅ Sucesso: ${ag.tipo_mensagem} enviado.`);
                 }
+            } else {
+                console.log(`⏳ Aguardando horário de: ${ag.nome} (${ag.tipo_mensagem})`);
             }
         }
     } catch (err) {
