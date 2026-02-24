@@ -15,11 +15,18 @@ async function enviarMensagemDinamica(numero, texto, instancia, apikey) {
         const urlBaseLimpa = baseUrl.replace(/\/$/, ""); 
         const url = `${urlBaseLimpa}/message/sendText/${instancia}`;
         
-        const payload = {
-            number: numeroLimpo,
-            options: { delay: 1200, presence: "composing", linkPreview: false },
-            textMessage: { text: texto }
-        };
+        // No seu scheduler.js, mude o payload para:
+const payload = {
+    number: numeroLimpo,
+    textMessage: {
+        text: texto
+    },
+    options: {
+        delay: 1200,
+        presence: "composing",
+        linkPreview: false
+    }
+};
 
         await axios.post(url, payload, { 
             headers: { 
