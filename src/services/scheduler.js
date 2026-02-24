@@ -53,25 +53,25 @@ async function obterMensagemFormatada(agendamento) {
 
 // --- O VIGIA (SCHEDULER) ---
 const verificarEEnviarTudo = async () => {
-    // Pegamos a hora agora e somamos 3 horas para igualar ao UTC do banco
+    // Criamos uma data que representa "Agora + 3 horas" para bater com o UTC do banco
     const agoraComFuso = new Date(new Date().getTime() + 3 * 60 * 60 * 1000);
     
-    console.log(`--- 🕵️ VIGIA FORMULAPÉ [FUSO AJUSTADO] ---`);
-    console.log(`Hora Brasília: ${new Date().toLocaleString()}`);
-    console.log(`Buscando no banco até: ${agoraComFuso.toISOString()}`);
+    console.log(`--- 🕵️ VIGIA FORMULAPÉ [FUSO AJUSTADO] [${new Date().toLocaleString()}] ---`);
+    console.log(`Buscando no banco registros até (UTC): ${agoraComFuso.toISOString()}`);
 
     try {
         const { data: lembretes, error } = await supabase
             .from('lembretes_final') 
             .select('*')
             .eq('status', 'pendente') 
-            // Agora ele busca tudo que for menor ou igual à hora atual + 3h
+            // Filtra tudo que o banco marcou como "futuro" mas que na verdade é "agora" em Brasília
             .lte('data_envio', agoraComFuso.toISOString()); 
 
         if (error) throw error;
 
         if (lembretes && lembretes.length > 0) {
-            console.log(`📦 Encontrados ${lembretes.length} lembretes.`);
+            console.log(`📦 Encontrados ${lembretes.length} lembretes para disparar.`);
+            
             for (let ag of lembretes) {
                 const msg = await obterMensagemFormatada(ag);
                 const enviado = await enviarMensagemAPI(ag.telefone, msg);
@@ -85,7 +85,7 @@ const verificarEEnviarTudo = async () => {
                 }
             }
         } else {
-            console.log("📌 Nada para enviar agora (esperando o horário).");
+            console.log("📌 Nada para enviar agora (aguardando horário de agendamento).");
         }
     } catch (err) {
         console.error("🔥 Erro no Vigia:", err.message);
