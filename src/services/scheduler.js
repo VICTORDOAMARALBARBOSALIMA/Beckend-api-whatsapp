@@ -5,9 +5,16 @@ const axios = require('axios');
 async function enviarMensagemDinamica(numero, texto, instancia, apikey) {
     const numeroLimpo = numero.toString().replace(/\D/g, '');
     try {
-        // A URL agora é montada usando a instância específica do dono do agendamento
-        const baseUrl = process.env.EVOLUTION_API_URL; 
-        const url = `${baseUrl}/message/sendText/${instancia}`;
+        // ⚠️ USANDO A VARIÁVEL QUE VOCÊ ME MOSTROU AGORA
+        const baseUrl = process.env.EVOLUTION_URL; 
+        
+        if (!baseUrl) {
+            console.error("❌ ERRO: Variável EVOLUTION_URL não definida no Render!");
+            return false;
+        }
+
+        const urlBaseLimpa = baseUrl.replace(/\/$/, ""); 
+        const url = `${urlBaseLimpa}/message/sendText/${instancia}`;
         
         const payload = {
             number: numeroLimpo,
@@ -16,11 +23,14 @@ async function enviarMensagemDinamica(numero, texto, instancia, apikey) {
         };
 
         await axios.post(url, payload, { 
-            headers: { "apikey": apikey, "Content-Type": "application/json" } 
+            headers: { 
+                "apikey": apikey, // O robô usa a apikey do DONO do agendamento (que vem do banco)
+                "Content-Type": "application/json" 
+            } 
         });
         return true;
     } catch (error) {
-        console.error(`❌ Erro na Instância ${instancia} (${numeroLimpo}):`, error.response?.data || error.message);
+        console.error(`❌ Erro na Instância ${instancia}:`, error.response?.data || error.message);
         return false;
     }
 }
