@@ -27,7 +27,7 @@ async function enviarMensagemDinamica(numero, texto, instancia, apikey) {
 
 async function obterMensagemFormatada(agendamento) {
     const templatesFixos = {
-        'confirmacao': "Olá {nome}!👋 Seu agendamento foi confirmado para o dia {data} às {hora}.Qualquer dúvida, estamos à disposição!Atenciosamente,{profissional}",
+        'confirmacao': "Olá {nome}!👋 Seu agendamento foi confirmado para o dia {data} às {hora}. Qualquer dúvida, estamos à disposição!Atenciosamente, {profissional}",
         'lembrete_24h': "Olá {nome}!👋 Lembramos que você tem um atendimento agendado para amanhã, dia {data} às {hora}. Contamos com sua presença! Atenciosamente, {profissional}",
         'pos_venda': "Olá {nome}!👋 Esperamos que você esteja bem após sua consulta! Caso tenha alguma dúvida ou precise de algo, estamos à disposição. Obrigado pela confiança! {profissional}"
     };
@@ -35,8 +35,8 @@ async function obterMensagemFormatada(agendamento) {
     let textoBase = agendamento.mensagem_personalizada || templatesFixos[agendamento.tipo_mensagem] || templatesFixos['confirmacao'];
 
     const dataObj = new Date(agendamento.data_envio);
-    const dataExibicao = new Date(dataObj.getTime() - 3 * 60 * 60 * 1000);
-    
+    const dataExibicao = new Date(agendamento.data_envio);
+
     const dataF = dataExibicao.toLocaleDateString('pt-BR');
     const horaF = dataExibicao.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
