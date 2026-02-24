@@ -3,13 +3,15 @@ const whatsappConfig = require('../config/whatsapp');
 const axios = require('axios');
 
 async function enviarMensagemAPI(numero, texto) {
-    let jid = numero.trim();
+    // 1. Limpa TUDO que não for número primeiro (tira +, espaços, parênteses)
+    const numeroLimpo = numero.toString().replace(/\D/g, '');
     
-    if (!jid.includes('@')) {
-        jid = `${jid.replace(/\D/g, '')}@s.whatsapp.net`;
-    }
+    // 2. Monta o JID padrão WhatsApp
+    const jid = `${numeroLimpo}@s.whatsapp.net`;
     
-    console.log(`🚀 Tentando enviar para JID: ${jid}`);
+    console.log(`🚀 Preparando envio para: ${jid}`);
+
+    // ... restante do seu código de fetch (POST para a Evolution API)
 
     try {
         // Ajustado para o padrão que sua instância exige: textMessage
