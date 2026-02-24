@@ -1,12 +1,13 @@
 const supabase = require('../config/db');
-const whatsappConfig = require('../config/whatsapp');
 const axios = require('axios');
 
-// --- ENVIO PARA EVOLUTION API ---
-async function enviarMensagemAPI(numero, texto) {
+// --- ENVIO DINÂMICO PARA EVOLUTION API ---
+async function enviarMensagemDinamica(numero, texto, instancia, apikey) {
     const numeroLimpo = numero.toString().replace(/\D/g, '');
     try {
-        const url = `${whatsappConfig.baseUrl}/message/sendText/${whatsappConfig.instance}`;
+        // A URL agora é montada usando a instância específica do dono do agendamento
+        const baseUrl = process.env.EVOLUTION_BASE_URL; 
+        const url = `${baseUrl}/message/sendText/${instancia}`;
         
         const payload = {
             number: numeroLimpo,
@@ -14,78 +15,73 @@ async function enviarMensagemAPI(numero, texto) {
             textMessage: { text: texto }
         };
 
-        await axios.post(url, payload, { headers: whatsappConfig.headers });
+        await axios.post(url, payload, { 
+            headers: { "apikey": apikey, "Content-Type": "application/json" } 
+        });
         return true;
     } catch (error) {
-        console.error(`❌ Erro Evolution API (${numeroLimpo}):`, error.response?.data || error.message);
+        console.error(`❌ Erro na Instância ${instancia} (${numeroLimpo}):`, error.response?.data || error.message);
         return false;
     }
 }
 
-// --- FORMATAÇÃO DE MENSAGEM (SEM CONSULTA AO BANCO) ---
 async function obterMensagemFormatada(agendamento) {
-    // Se você escreveu algo personalizado para esse agendamento específico, ele ainda respeita.
-    if (agendamento.mensagem_personalizada) {
-        return agendamento.mensagem_personalizada; 
-    }
-
-    // Textos Padrão (Fixos para evitar erro de banco)
     const templatesFixos = {
         'confirmacao': "Olá {nome}! Confirmamos seu horário de {servico} para o dia {data} às {hora}. Podemos confirmar?",
-        'lembrete_24h': "Olá {nome}! Passando para lembrar do seu atendimento de {servico} amanhã, dia {data} às {hora}. Até lá!",
-        'pos_venda': "Olá {nome}! ✨ Esperamos que tenha gostado do seu atendimento hoje. Como você está se sentindo?"
+        'lembrete_24h': "Olá {nome}! Passando para lembrar do seu atendimento de {servico} amanhã, {data} às {hora}.",
+        'pos_venda': "Olá {nome}! Como você está se sentindo após o atendimento de hoje?"
     };
 
-    // Define qual texto usar baseado no tipo_mensagem vindo do Mocha
-    let textoBase = templatesFixos[agendamento.tipo_mensagem] || templatesFixos['confirmacao'];
+    let textoBase = agendamento.mensagem_personalizada || templatesFixos[agendamento.tipo_mensagem] || templatesFixos['confirmacao'];
 
     const dataObj = new Date(agendamento.data_envio);
-    const dataF = !isNaN(dataObj) ? dataObj.toLocaleDateString('pt-BR') : "";
-    const horaF = !isNaN(dataObj) ? dataObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : "";
+    const dataExibicao = new Date(dataObj.getTime() - 3 * 60 * 60 * 1000);
+    
+    const dataF = dataExibicao.toLocaleDateString('pt-BR');
+    const horaF = dataExibicao.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-    // Faz as trocas das variáveis {nome}, {data}, etc.
     return textoBase
         .replace(/{nome}/g, agendamento.nome || 'Cliente')
         .replace(/{data}/g, dataF)
         .replace(/{hora}/g, horaF)
-        .replace(/{servico}/g, agendamento.servico || 'procedimento');
+        .replace(/{servico}/g, agendamento.servico || 'atendimento');
 }
 
-// --- O VIGIA (SCHEDULER) ---
 const verificarEEnviarTudo = async () => {
-    // Criamos uma data que representa "Agora + 3 horas" para bater com o UTC do banco
     const agoraComFuso = new Date(new Date().getTime() + 3 * 60 * 60 * 1000);
-    
-    console.log(`--- 🕵️ VIGIA FORMULAPÉ [FUSO AJUSTADO] [${new Date().toLocaleString()}] ---`);
-    console.log(`Buscando no banco registros até (UTC): ${agoraComFuso.toISOString()}`);
+    console.log(`--- 🕵️ VIGIA MULTI-INSTÂNCIA [${new Date().toLocaleString()}] ---`);
 
     try {
         const { data: lembretes, error } = await supabase
             .from('lembretes_final') 
             .select('*')
             .eq('status', 'pendente') 
-            // Filtra tudo que o banco marcou como "futuro" mas que na verdade é "agora" em Brasília
             .lte('data_envio', agoraComFuso.toISOString()); 
 
         if (error) throw error;
 
         if (lembretes && lembretes.length > 0) {
-            console.log(`📦 Encontrados ${lembretes.length} lembretes para disparar.`);
-            
             for (let ag of lembretes) {
+                // BUSCA A INSTÂNCIA DO USUÁRIO NO BANCO
+                const { data: conexao } = await supabase
+                    .from('usuarios_whatsapp')
+                    .select('instance_name, apikey')
+                    .eq('user_id', ag.user_id)
+                    .single();
+
+                if (!conexao) {
+                    console.error(`⚠️ Usuário ${ag.user_id} sem WhatsApp conectado.`);
+                    continue;
+                }
+
                 const msg = await obterMensagemFormatada(ag);
-                const enviado = await enviarMensagemAPI(ag.telefone, msg);
+                const enviado = await enviarMensagemDinamica(ag.telefone, msg, conexao.instance_name, conexao.apikey);
                 
                 if (enviado) {
-                    await supabase
-                        .from('lembretes_final')
-                        .update({ status: 'enviado' })
-                        .eq('id', ag.id);
-                    console.log(`✅ Sucesso para: ${ag.nome}`);
+                    await supabase.from('lembretes_final').update({ status: 'enviado' }).eq('id', ag.id);
+                    console.log(`✅ [${conexao.instance_name}] Mensagem enviada para: ${ag.nome}`);
                 }
             }
-        } else {
-            console.log("📌 Nada para enviar agora (aguardando horário de agendamento).");
         }
     } catch (err) {
         console.error("🔥 Erro no Vigia:", err.message);
