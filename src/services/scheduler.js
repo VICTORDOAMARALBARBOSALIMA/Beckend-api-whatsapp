@@ -4,20 +4,38 @@ const axios = require('axios');
 
 // --- ENVIO PARA EVOLUTION API ---
 async function enviarMensagemAPI(numero, texto) {
+    // 1. Limpa o número para garantir que só tenha dígitos
     const numeroLimpo = numero.toString().replace(/\D/g, '');
+    
     try {
         const url = `${whatsappConfig.baseUrl}/message/sendText/${whatsappConfig.instance}`;
-        await axios.post(url, {
+        
+        // 2. Montando o payload no formato que evita o Erro 400
+        const payload = {
             number: numeroLimpo,
-            text: texto
-        }, { headers: whatsappConfig.headers });
-        return true;
+            options: {
+                delay: 1200,
+                presence: "composing",
+                linkPreview: false
+            },
+            textMessage: {
+                text: texto
+            }
+        };
+
+        console.log(`🚀 Tentando envio para ${numeroLimpo}...`);
+
+        const response = await axios.post(url, payload, { headers: whatsappConfig.headers });
+        
+        return response.status === 200 || response.status === 201;
     } catch (error) {
-        console.error(`❌ Erro Evolution API (${numeroLimpo}):`, error.response?.data || error.message);
+        // Log detalhado para sabermos exatamente o que a Evolution não gostou
+        console.error(`❌ Erro detalhado Evolution (${numeroLimpo}):`, 
+            JSON.stringify(error.response?.data || error.message, null, 2)
+        );
         return false;
     }
 }
-
 async function obterMensagemFormatada(agendamento) {
     // 1. PRIORIDADE: Mensagem personalizada
     if (agendamento.mensagem_personalizada) {
