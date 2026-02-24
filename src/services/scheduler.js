@@ -48,16 +48,22 @@ async function obterMensagemFormatada(agendamento) {
 }
 
 const verificarEEnviarTudo = async () => {
-    const agoraComFuso = new Date(new Date().getTime() + 3 * 60 * 60 * 1000);
-    console.log(`--- 🕵️ VIGIA MULTI-INSTÂNCIA [${new Date().toLocaleString()}] ---`);
+    // Agora que TZ = America/Sao_Paulo, o "new Date()" já vem no horário de Brasília!
+    const agora = new Date();
+    
+    // Como o banco Supabase salva em UTC, precisamos que a busca use o ISO do momento atual
+    // O .toISOString() sempre manda em UTC, o que é perfeito para comparar com o banco.
+    const agoraISO = agora.toISOString();
+
+    console.log(`--- 🕵️ VIGIA MULTI-INSTÂNCIA [${agora.toLocaleString('pt-BR')}] ---`);
+    console.log(`Buscando no banco registros até: ${agoraISO}`);
 
     try {
         const { data: lembretes, error } = await supabase
             .from('lembretes_final') 
             .select('*')
             .eq('status', 'pendente') 
-            .lte('data_envio', agoraComFuso.toISOString()); 
-
+            .lte('data_envio', agoraISO); // Busca tudo que já passou da hora de enviar
         if (error) throw error;
 
         if (lembretes && lembretes.length > 0) {
