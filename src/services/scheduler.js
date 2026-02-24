@@ -53,23 +53,25 @@ async function obterMensagemFormatada(agendamento) {
 
 // --- O VIGIA (SCHEDULER) ---
 const verificarEEnviarTudo = async () => {
-    const agora = new Date();
-    console.log(`--- 🕵️ VIGIA FORMULAPÉ [SIMPLIFICADO] [${agora.toLocaleString()}] ---`);
+    // Pegamos a hora agora e somamos 3 horas para igualar ao UTC do banco
+    const agoraComFuso = new Date(new Date().getTime() + 3 * 60 * 60 * 1000);
+    
+    console.log(`--- 🕵️ VIGIA FORMULAPÉ [FUSO AJUSTADO] ---`);
+    console.log(`Hora Brasília: ${new Date().toLocaleString()}`);
+    console.log(`Buscando no banco até: ${agoraComFuso.toISOString()}`);
 
     try {
-        // Pega tudo que é 'pendente' e cuja data de envio já passou ou é AGORA
-        // Usamos uma margem de segurança para garantir que o fuso não trave o envio
-       const { data: lembretes, error } = await supabase
-    .from('lembretes_final') 
-    .select('*')
-    .eq('status', 'pendente') 
-    // Comparamos com a hora atual + 3 horas de margem para compensar o fuso
-    .filter('data_envio', 'lte', new Date(new Date().getTime() + 3 * 60 * 60 * 1000).toISOString());
+        const { data: lembretes, error } = await supabase
+            .from('lembretes_final') 
+            .select('*')
+            .eq('status', 'pendente') 
+            // Agora ele busca tudo que for menor ou igual à hora atual + 3h
+            .lte('data_envio', agoraComFuso.toISOString()); 
+
         if (error) throw error;
 
         if (lembretes && lembretes.length > 0) {
-            console.log(`📦 Encontrados ${lembretes.length} lembretes para enviar.`);
-            
+            console.log(`📦 Encontrados ${lembretes.length} lembretes.`);
             for (let ag of lembretes) {
                 const msg = await obterMensagemFormatada(ag);
                 const enviado = await enviarMensagemAPI(ag.telefone, msg);
@@ -79,14 +81,14 @@ const verificarEEnviarTudo = async () => {
                         .from('lembretes_final')
                         .update({ status: 'enviado' })
                         .eq('id', ag.id);
-                    console.log(`✅ Mensagem enviada para: ${ag.nome}`);
+                    console.log(`✅ Sucesso para: ${ag.nome}`);
                 }
             }
         } else {
-            console.log("📌 Nada pendente para este minuto.");
+            console.log("📌 Nada para enviar agora (esperando o horário).");
         }
     } catch (err) {
-        console.error("🔥 Erro crítico no Vigia:", err.message);
+        console.error("🔥 Erro no Vigia:", err.message);
     }
 };
 
