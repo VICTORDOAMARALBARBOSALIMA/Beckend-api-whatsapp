@@ -2,103 +2,94 @@ const supabase = require('../config/db');
 const whatsappConfig = require('../config/whatsapp');
 const axios = require('axios');
 
+// --- ENVIO PARA EVOLUTION API ---
 async function enviarMensagemAPI(numero, texto) {
-    // 1. Limpa TUDO que não for número primeiro (tira +, espaços, parênteses)
     const numeroLimpo = numero.toString().replace(/\D/g, '');
-    
-    // 2. Monta o JID padrão WhatsApp
-    const jid = `${numeroLimpo}@s.whatsapp.net`;
-    
-    console.log(`🚀 Preparando envio para: ${jid}`);
-
-    // ... restante do seu código de fetch (POST para a Evolution API)
-
     try {
-        // Ajustado para o padrão que sua instância exige: textMessage
-        await axios.post(`${whatsappConfig.baseUrl}/message/sendText/${whatsappConfig.instance}`, {
-            number: jid,
-            textMessage: {
-                text: texto
-            }
+        const url = `${whatsappConfig.baseUrl}/message/sendText/${whatsappConfig.instance}`;
+        await axios.post(url, {
+            number: numeroLimpo,
+            text: texto
         }, { headers: whatsappConfig.headers });
-        
         return true;
     } catch (error) {
-        console.error(`❌ Erro Evolution API (${jid}):`, 
-            JSON.stringify(error.response?.data || error.message, null, 2)
-        );
+        console.error(`❌ Erro Evolution API (${numeroLimpo}):`, error.response?.data || error.message);
         return false;
     }
 }
 
-// <<< AQUI ESTÁ O AJUSTE DA FORMATAÇÃO >>>
-function formatarMensagem(agendamento) {
-    // CORREÇÃO: Alterado de data_hora para data_envio
-    const dataObj = new Date(agendamento.data_envio);
-    
-    // Validação para garantir que a data é um objeto válido
-    const dataFormatada = !isNaN(dataObj) 
-        ? dataObj.toLocaleDateString('pt-BR') 
-        : "Data pendente";
-        
-    const horaFormatada = !isNaN(dataObj) 
-        ? dataObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) 
-        : "Horário pendente";
-    
-    // Usando os nomes de colunas que vimos nas fotos do seu Supabase
-    const nome = agendamento.paciente_nom || agendamento.paciente_nome || 'Cliente';
-    const servico = agendamento.servico || 'atendimento';
+async function obterMensagemFormatada(agendamento) {
+    // 1. PRIORIDADE: Mensagem personalizada escrita no agendamento
+    if (agendamento.mensagem_personalizada) {
+        console.log(`📝 Usando mensagem personalizada para: ${agendamento.nome}`);
+        return agendamento.mensagem_personalizada; 
+    }
 
-    return `Olá ${nome}! 
-Passando para confirmar seu horário de agendamento.
-🗓️ Data: ${dataFormatada}
-⏰ Hora: ${horaFormatada}
-Podemos confirmar?`;
+    // 2. SEGUNDA OPÇÃO: Busca o template padrão
+    try {
+        const { data: template } = await supabase
+            .from('templates')
+            .select('conteudo')
+            .eq('slug', agendamento.tipo_mensagem || 'confirmacao')
+            .single();
+
+        let textoBase = template?.conteudo || "Olá {{nome}}, confirmamos seu horário de {{servico}} para {{data}} às {{hora}}.";
+
+        const dataObj = new Date(agendamento.data_envio);
+        const dataF = !isNaN(dataObj) ? dataObj.toLocaleDateString('pt-BR') : "pendente";
+        // CORREÇÃO AQUI: Adicionado o fallback para evitar o erro de sintaxe
+        const horaF = !isNaN(dataObj) ? dataObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : "pendente";
+
+        // 3. Formata o template
+        return textoBase
+            .replace(/{{nome}}/g, agendamento.nome || 'Cliente')
+            .replace(/{{servico}}/g, agendamento.servico || 'atendimento')
+            .replace(/{{data}}/g, dataF)
+            .replace(/{{hora}}/g, horaF);
+            
+    } catch (err) {
+        return `Olá ${agendamento.nome || 'Cliente'}, confirmamos seu atendimento.`;
+    }
 }
 
+// --- O VIGIA (SCHEDULER) ---
 const verificarEEnviarTudo = async () => {
-    console.log("--- 🕵️ VIGIA FORMULAPÉ EM AÇÃO (Tabela: lembretes_final) ---");
     const agora = new Date();
+    console.log(`--- 🕵️ VIGIA FORMULAPÉ EM AÇÃO [${agora.toLocaleString()}] ---`);
 
     try {
-        // BUSCA: Agora usando os nomes corretos (status e data_envio)
-        // Removido o .gt para pegar também o que está atrasado
         const { data: lembretes, error } = await supabase
             .from('lembretes_final') 
             .select('*')
             .eq('status', 'pendente') 
-            .lte('data_envio', agora.toISOString()); // Pega tudo de AGORA para TRÁS
+            .lte('data_envio', agora.toISOString()); 
 
         if (error) {
-            console.error("❌ Erro ao buscar:", error.message);
+            console.error("❌ Erro ao buscar no Supabase:", error.message);
             return;
         }
 
         if (lembretes && lembretes.length > 0) {
-            console.log(`📦 Encontrados ${lembretes.length} lembretes para processar.`);
+            console.log(`📦 Encontrados ${lembretes.length} lembretes pendentes.`);
             
             for (let ag of lembretes) {
-                const msg = formatarMensagem(ag);
-                
-                // CORREÇÃO: Usando ag.telefone que é o nome novo da coluna
-                const numeroParaEnvio = ag.telefone; 
-                
-                const enviado = await enviarMensagemAPI(numeroParaEnvio, msg);
+                // ATENÇÃO: Adicionado o 'await' aqui pois a função agora busca no banco
+                const msg = await obterMensagemFormatada(ag);
+                const enviado = await enviarMensagemAPI(ag.telefone, msg);
                 
                 if (enviado) {
-                    // CORREÇÃO: Atualizando a coluna 'status' (não status_lembrete)
                     await supabase
                         .from('lembretes_final')
                         .update({ status: 'enviado' })
                         .eq('id', ag.id);
-                    console.log(`✅ Lembrete enviado para o número: ${numeroParaEnvio}`);
+                    console.log(`✅ Sucesso para: ${ag.nome} (${ag.telefone})`);
                 }
             }
         } else {
-            console.log("📌 Nenhum lembrete pendente encontrado para o horário atual.");
+            console.log("📌 Nada para enviar agora.");
         }
     } catch (err) {
-        console.error("🔥 Erro inesperado no Vigia:", err);
+        console.error("🔥 Erro crítico no Vigia:", err);
     }
 };
 
