@@ -2,15 +2,19 @@ const supabase = require('../config/db');
 const whatsappConfig = require('../config/whatsapp');
 const axios = require('axios');
 
+// --- ENVIO PARA EVOLUTION API ---
 async function enviarMensagemAPI(numero, texto) {
     const numeroLimpo = numero.toString().replace(/\D/g, '');
     try {
         const url = `${whatsappConfig.baseUrl}/message/sendText/${whatsappConfig.instance}`;
-        await axios.post(url, {
+        
+        const payload = {
             number: numeroLimpo,
             options: { delay: 1200, presence: "composing", linkPreview: false },
             textMessage: { text: texto }
-        }, { headers: whatsappConfig.headers });
+        };
+
+        await axios.post(url, payload, { headers: whatsappConfig.headers });
         return true;
     } catch (error) {
         console.error(`❌ Erro Evolution API (${numeroLimpo}):`, error.response?.data || error.message);
@@ -18,68 +22,73 @@ async function enviarMensagemAPI(numero, texto) {
     }
 }
 
+// --- FORMATAÇÃO DE MENSAGEM (SEM CONSULTA AO BANCO) ---
 async function obterMensagemFormatada(agendamento) {
-    // 1. PRIORIDADE: Mensagem personalizada escrita na consulta
+    // Se você escreveu algo personalizado para esse agendamento específico, ele ainda respeita.
     if (agendamento.mensagem_personalizada) {
         return agendamento.mensagem_personalizada; 
     }
 
-    const mapaSlugs = {
-        'confirmacao': 'confirmation',
-        'lembrete_24h': '24h_before',
-        'pos_venda': 'post_appointment'
+    // Textos Padrão (Fixos para evitar erro de banco)
+    const templatesFixos = {
+        'confirmacao': "Olá {nome}! Confirmamos seu horário de {servico} para o dia {data} às {hora}. Podemos confirmar?",
+        'lembrete_24h': "Olá {nome}! Passando para lembrar do seu atendimento de {servico} amanhã, dia {data} às {hora}. Até lá!",
+        'pos_venda': "Olá {nome}! ✨ Esperamos que tenha gostado do seu atendimento hoje. Como você está se sentindo?"
     };
 
-    const slugBusca = mapaSlugs[agendamento.tipo_mensagem] || agendamento.tipo_mensagem || 'confirmation';
-
-    // 2. BUSCA O TEMPLATE: Filtra por SLUG e pelo USER_ID do dono da conta
-    const { data: template } = await supabase
-        .from('templates')
-        .select('conteudo')
-        .eq('slug', slugBusca)
-        .eq('user_id', agendamento.user_id) 
-        .single();
-
-    // 3. FALLBACK: Se o usuário não criou template, usa o padrão do sistema
-    let textoBase = template?.conteudo || "Olá {nome}, confirmamos seu horário de {servico} para {data} às {hora}.";
+    // Define qual texto usar baseado no tipo_mensagem vindo do Mocha
+    let textoBase = templatesFixos[agendamento.tipo_mensagem] || templatesFixos['confirmacao'];
 
     const dataObj = new Date(agendamento.data_envio);
     const dataF = !isNaN(dataObj) ? dataObj.toLocaleDateString('pt-BR') : "";
     const horaF = !isNaN(dataObj) ? dataObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : "";
 
+    // Faz as trocas das variáveis {nome}, {data}, etc.
     return textoBase
         .replace(/{nome}/g, agendamento.nome || 'Cliente')
         .replace(/{data}/g, dataF)
         .replace(/{hora}/g, horaF)
-        .replace(/{servico}/g, agendamento.servico || 'atendimento');
+        .replace(/{servico}/g, agendamento.servico || 'procedimento');
 }
 
+// --- O VIGIA (SCHEDULER) ---
 const verificarEEnviarTudo = async () => {
     const agora = new Date();
-    console.log(`--- 🕵️ VIGIA FORMULAPÉ EM AÇÃO [${agora.toLocaleString()}] ---`);
+    console.log(`--- 🕵️ VIGIA FORMULAPÉ [SIMPLIFICADO] [${agora.toLocaleString()}] ---`);
 
     try {
+        // Busca apenas o que está pendente e no horário de envio
         const { data: lembretes, error } = await supabase
             .from('lembretes_final') 
             .select('*')
             .eq('status', 'pendente') 
             .lte('data_envio', agora.toISOString()); 
 
-        if (error) throw error;
+        if (error) {
+            console.error("❌ Erro ao buscar no Supabase:", error.message);
+            return;
+        }
 
         if (lembretes && lembretes.length > 0) {
-            console.log(`📦 Encontrados ${lembretes.length} lembretes.`);
+            console.log(`📦 Encontrados ${lembretes.length} lembretes para enviar.`);
+            
             for (let ag of lembretes) {
                 const msg = await obterMensagemFormatada(ag);
                 const enviado = await enviarMensagemAPI(ag.telefone, msg);
+                
                 if (enviado) {
-                    await supabase.from('lembretes_final').update({ status: 'enviado' }).eq('id', ag.id);
-                    console.log(`✅ Sucesso para: ${ag.nome}`);
+                    await supabase
+                        .from('lembretes_final')
+                        .update({ status: 'enviado' })
+                        .eq('id', ag.id);
+                    console.log(`✅ Mensagem enviada para: ${ag.nome}`);
                 }
             }
+        } else {
+            console.log("📌 Nada pendente para este minuto.");
         }
     } catch (err) {
-        console.error("🔥 Erro no Vigia:", err.message);
+        console.error("🔥 Erro crítico no Vigia:", err.message);
     }
 };
 
