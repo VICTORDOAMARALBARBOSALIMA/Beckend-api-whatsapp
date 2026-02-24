@@ -6,7 +6,7 @@ async function enviarMensagemDinamica(numero, texto, instancia, apikey) {
     const numeroLimpo = numero.toString().replace(/\D/g, '');
     try {
         // A URL agora é montada usando a instância específica do dono do agendamento
-        const baseUrl = process.env.EVOLUTION_BASE_URL; 
+        const baseUrl = process.env.EVOLUTION_API_URL; 
         const url = `${baseUrl}/message/sendText/${instancia}`;
         
         const payload = {
