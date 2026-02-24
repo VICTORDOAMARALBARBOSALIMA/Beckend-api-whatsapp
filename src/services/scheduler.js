@@ -57,17 +57,15 @@ const verificarEEnviarTudo = async () => {
     console.log(`--- 🕵️ VIGIA FORMULAPÉ [SIMPLIFICADO] [${agora.toLocaleString()}] ---`);
 
     try {
-        // Busca apenas o que está pendente e no horário de envio
-        const { data: lembretes, error } = await supabase
-            .from('lembretes_final') 
-            .select('*')
-            .eq('status', 'pendente') 
-            .lte('data_envio', agora.toISOString()); 
-
-        if (error) {
-            console.error("❌ Erro ao buscar no Supabase:", error.message);
-            return;
-        }
+        // Pega tudo que é 'pendente' e cuja data de envio já passou ou é AGORA
+        // Usamos uma margem de segurança para garantir que o fuso não trave o envio
+       const { data: lembretes, error } = await supabase
+    .from('lembretes_final') 
+    .select('*')
+    .eq('status', 'pendente') 
+    // Comparamos com a hora atual + 3 horas de margem para compensar o fuso
+    .filter('data_envio', 'lte', new Date(new Date().getTime() + 3 * 60 * 60 * 1000).toISOString());
+        if (error) throw error;
 
         if (lembretes && lembretes.length > 0) {
             console.log(`📦 Encontrados ${lembretes.length} lembretes para enviar.`);
