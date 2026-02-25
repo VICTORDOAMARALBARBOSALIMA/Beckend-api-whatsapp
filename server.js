@@ -65,12 +65,8 @@ app.post('/templates/update', async (req, res) => {
 });
 
 // --- ROTA DE DISPARO MANUAL (CHAMADA PELO MOCHA) ---
-app.post('/enviar-agora', async (req, res) => {
-    console.log("-----------------------------------------");
-    console.log("🚨 ALERTA: REQUISIÇÃO MANUAL RECEBIDA!");
-    console.log("📦 CORPO RECEBIDO:", JSON.stringify(req.body));
-    console.log("-----------------------------------------");
-
+app.post(['/enviar-agora', '/send-manual'], async (req, res) => {
+    console.log("🚨 REQUISIÇÃO MANUAL RECEBIDA!");
     const { agendamentoId } = req.body;
 
     if (!agendamentoId) {
