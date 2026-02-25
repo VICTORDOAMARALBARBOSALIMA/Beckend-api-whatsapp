@@ -66,23 +66,42 @@ app.post('/templates/update', async (req, res) => {
 
 // --- ROTA DE DISPARO MANUAL (CHAMADA PELO MOCHA) ---
 app.post('/enviar-agora', async (req, res) => {
+    console.log("-----------------------------------------");
+    console.log("🚨 ALERTA: REQUISIÇÃO MANUAL RECEBIDA!");
+    console.log("📦 CORPO RECEBIDO:", JSON.stringify(req.body));
+    console.log("-----------------------------------------");
+
     const { agendamentoId } = req.body;
 
-    if (!agendamentoId) return res.status(400).json({ erro: "ID obrigatório" });
+    if (!agendamentoId) {
+        return res.status(400).json({ erro: "ID não fornecido no JSON" });
+    }
 
     try {
-        // Forçamos o status para pendente e a data para agora
+        // Teste de busca antes do update
+        const { data: registro } = await supabase
+            .from('lembretes_final')
+            .select('id, nome')
+            .eq('id', agendamentoId)
+            .single();
+
+        if (!registro) {
+            console.log("❌ ERRO: ID recebido não existe no banco:", agendamentoId);
+            return res.status(404).json({ erro: "Agendamento não encontrado no banco" });
+        }
+
+        console.log(`✅ Registro encontrado: ${registro.nome}. Atualizando status...`);
+
         await supabase
             .from('lembretes_final')
             .update({ status: 'pendente', data_envio: new Date().toISOString() })
             .eq('id', agendamentoId);
 
-        // Disparamos o vigia na hora
         await verificarEEnviarTudo();
+        res.json({ mensagem: "Sucesso!" });
 
-        res.json({ mensagem: "Comando enviado com sucesso!" });
     } catch (err) {
-        console.error("❌ Erro na rota enviar-agora:", err.message);
+        console.error("🔥 Erro na rota manual:", err.message);
         res.status(500).json({ erro: err.message });
     }
 });
