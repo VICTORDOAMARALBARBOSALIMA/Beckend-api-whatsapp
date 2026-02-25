@@ -58,7 +58,27 @@ app.post('/templates/update', async (req, res) => {
     
     res.json({ message: `Template '${slug}' atualizado com sucesso!` });
 });
+// --- ROTA DE DISPARO MANUAL ---
+app.post('/enviar-agora', async (req, res) => {
+    const { agendamentoId } = req.body;
 
+    if (!agendamentoId) return res.status(400).json({ erro: "ID obrigatório" });
+
+    try {
+        // Forçamos o status para pendente e a data para agora
+        await supabase
+            .from('lembretes_final')
+            .update({ status: 'pendente', data_envio: new Date().toISOString() })
+            .eq('id', agendamentoId);
+
+        // Disparamos o vigia na hora
+        await verificarEEnviarTudo();
+
+        res.json({ mensagem: "Comando enviado com sucesso!" });
+    } catch (err) {
+        res.status(500).json({ erro: err.message });
+    }
+});
 // --- ROTA DE STATUS ---
 app.get('/status', (req, res) => {
     res.json({ 
