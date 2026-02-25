@@ -1,15 +1,19 @@
 const express = require('express');
+const cors = require('cors'); // Importado no lugar certo
 require('dotenv').config();
-const cors = require('cors');
-app.use(cors()); // Isso permite que o app do Mocha chame o seu backend no Render
+
+const app = express(); // Primeiro criamos o app
+
+// Agora configuramos o app
+app.use(cors()); // Agora sim o cors funciona!
+app.use(express.json());
+
+// Importações de módulos do projeto (após inicializar o express)
 const whatsappConfig = require('./src/config/whatsapp'); 
 const { verificarEEnviarTudo } = require('./src/services/scheduler');
 const supabase = require('./src/config/db');
 
-const app = express();
-app.use(express.json());
-
-// --- ROTA DE WEBHOOK (Ouvido da Evolution API) ---
+// --- ROTA DE WEBHOOK ---
 app.post('/webhook', (req, res) => {
     if (req.body.event === "messages.upsert") {
         console.log("📩 Nova mensagem detectada via Evolution API.");
@@ -17,7 +21,7 @@ app.post('/webhook', (req, res) => {
     res.status(200).send("OK"); 
 });
 
-// --- ROTA DE ENVIO MANUAL ---
+// --- ROTA DE ENVIO MANUAL (VIA QUERY) ---
 app.get('/enviar', async (req, res) => {
     const { numero, mensagem } = req.query;
     if (!numero || !mensagem) return res.status(400).send("Faltou numero ou mensagem!");
@@ -59,7 +63,8 @@ app.post('/templates/update', async (req, res) => {
     
     res.json({ message: `Template '${slug}' atualizado com sucesso!` });
 });
-// --- ROTA DE DISPARO MANUAL ---
+
+// --- ROTA DE DISPARO MANUAL (CHAMADA PELO MOCHA) ---
 app.post('/enviar-agora', async (req, res) => {
     const { agendamentoId } = req.body;
 
@@ -77,9 +82,11 @@ app.post('/enviar-agora', async (req, res) => {
 
         res.json({ mensagem: "Comando enviado com sucesso!" });
     } catch (err) {
+        console.error("❌ Erro na rota enviar-agora:", err.message);
         res.status(500).json({ erro: err.message });
     }
 });
+
 // --- ROTA DE STATUS ---
 app.get('/status', (req, res) => {
     res.json({ 
@@ -89,10 +96,10 @@ app.get('/status', (req, res) => {
     });
 });
 
-// --- VIGIA AUTOMÁTICO (Intervalo de 1 minuto) ---
+// --- VIGIA AUTOMÁTICO ---
 console.log("📢 Iniciando vigia de agendamentos...");
 
-// Primeira execução imediata ao subir o servidor
+// Primeira execução imediata
 verificarEEnviarTudo(); 
 
 // Loop de 1 em 1 minuto
