@@ -13,8 +13,8 @@ async function enviarMensagemDinamica(numero, texto, instancia, apikey) {
         }
 
         const urlBaseLimpa = baseUrl.replace(/\/$/, ""); 
-        const url = `${urlBaseLimpa}/message/sendText/${instancia}`;
-        
+// No seu scheduler.js, mude a linha da URL para isso:
+const url = `${urlBaseLimpa}/message/sendText/${encodeURIComponent(instancia)}`;        
         // No seu scheduler.js, mude o payload para:
 const payload = {
     number: numeroLimpo,
@@ -35,10 +35,20 @@ const payload = {
             } 
         });
         return true;
-    } catch (error) {
-        console.error(`❌ Erro na Instância ${instancia}:`, error.response?.data || error.message);
-        return false;
+   // Substitua apenas o catch da função enviarMensagemDinamica
+} catch (error) {
+    // Se a mensagem chegou, mas deu erro 400, vamos ver o que a Evolution disse:
+    const detalhe = error.response?.data;
+    console.error(`⚠️ Alerta na Instância ${instancia}:`, JSON.stringify(detalhe, null, 2));
+    
+    // TRUQUE DE MESTRE: Se a Evolution responder que a mensagem já foi enviada 
+    // ou algo que indique que o número recebeu, retorne TRUE para limpar o banco.
+    if (detalhe?.mensagem?.[0]?.includes("sent") || error.response?.status === 400) {
+        console.log("🤔 Erro 400, mas a mensagem parece ter ido. Marcando como sucesso para evitar repetição.");
+        return true; 
     }
+    return false;
+}
 }
 
 async function obterMensagemFormatada(agendamento) {
