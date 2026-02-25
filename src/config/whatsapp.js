@@ -1,7 +1,7 @@
 require('dotenv').config();
 
 module.exports = {
-    baseUrl: process.env.EVOLUTION_API_URL,
+    baseUrl: process.env.EVOLUTION_URL,
     apiKey: process.env.EVOLUTION_API_KEY,
     instance: process.env.EVOLUTION_INSTANCE_NAME,
     
