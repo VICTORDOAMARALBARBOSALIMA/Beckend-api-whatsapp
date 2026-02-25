@@ -1,6 +1,7 @@
 const express = require('express');
 require('dotenv').config();
-
+const cors = require('cors');
+app.use(cors()); // Isso permite que o app do Mocha chame o seu backend no Render
 const whatsappConfig = require('./src/config/whatsapp'); 
 const { verificarEEnviarTudo } = require('./src/services/scheduler');
 const supabase = require('./src/config/db');
