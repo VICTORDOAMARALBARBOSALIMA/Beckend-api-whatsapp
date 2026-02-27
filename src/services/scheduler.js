@@ -5,12 +5,8 @@ const axios = require('axios');
 async function enviarMensagemDinamica(numero, texto, instancia, apikey) {
     const numeroLimpo = numero.toString().replace(/\D/g, '');
     try {
-        const baseUrl = process.env.EVOLUTION_URL; 
-        if (!baseUrl) {
-            console.error("❌ ERRO: Variável EVOLUTION_URL não definida no Render!");
-            return false;
-        }
-
+        const baseUrl = process.env.EVOLUTION_URL || "https://api.formulape.app.br"; // Backup caso a env falhe
+        
         const urlBaseLimpa = baseUrl.replace(/\/$/, ""); 
         const url = `${urlBaseLimpa}/message/sendText/${encodeURIComponent(instancia)}`;        
         
@@ -20,16 +16,17 @@ async function enviarMensagemDinamica(numero, texto, instancia, apikey) {
             options: { delay: 1200, presence: "composing", linkPreview: false }
         };
 
+        console.log(`📡 Tentando enviar via Evolution: ${instancia}`);
+
         await axios.post(url, payload, { 
             headers: { "apikey": apikey, "Content-Type": "application/json" } 
         });
         return true;
 
     } catch (error) {
-        const detalhe = error.response?.data;
-        if (detalhe?.mensagem?.[0]?.includes("sent") || error.response?.status === 400) {
-            return true; 
-        }
+        console.error(`❌ Erro na Evolution (${instancia}):`, error.response?.data || error.message);
+        // Se der erro de "já enviado" ou algo do tipo, marcamos como sucesso para não travar o loop
+        if (error.response?.status === 400 || error.response?.status === 409) return true;
         return false;
     }
 }
@@ -47,8 +44,6 @@ async function obterMensagemFormatada(agendamento) {
     const dataF = dataExibicao.toLocaleDateString('pt-BR');
     const horaF = dataExibicao.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-    // Aqui usamos o campo 'profissional' que deve vir da tabela 'lembretes_final'
-    // Se o Mocha salvar o nome lá, ele aparece aqui.
     return textoBase
         .replace(/{nome}/g, agendamento.nome || 'Cliente')
         .replace(/{data}/g, dataF)
@@ -67,35 +62,49 @@ const verificarEEnviarTudo = async () => {
             .select('*')
             .eq('status', 'pendente');
 
-        if (error) throw error;
-        if (!lembretes || lembretes.length === 0) return;
+        if (error) {
+            console.error("❌ Erro ao buscar lembretes:", error.message);
+            throw error;
+        }
+
+        if (!lembretes || lembretes.length === 0) {
+            console.log("📭 Nenhum agendamento pendente.");
+            return;
+        }
 
         for (let ag of lembretes) {
+            // Se for confirmação, envia na hora. Se não, verifica se já chegou o horário.
             const ehConfirmacao = ag.tipo_mensagem === 'confirmacao';
             const jaPassouDaHora = new Date(ag.data_envio) <= agora;
 
             if (ehConfirmacao || jaPassouDaHora) {
-                const { data: conexao } = await supabase
+                console.log(`🔎 Processando: ${ag.nome} (${ag.tipo_mensagem})`);
+
+                // BUSCA A INSTÂNCIA DINÂMICA NO BANCO
+                const { data: conexao, error: connError } = await supabase
                     .from('usuarios_whatsapp')
                     .select('instance_name, apikey')
                     .eq('user_id', ag.user_id)
-                    .single();
+                    .maybeSingle(); // Usamos maybeSingle para não quebrar se não achar
 
-                if (!conexao) continue;
+                if (connError || !conexao) {
+                    console.error(`⚠️ Instância não encontrada para o user_id: ${ag.user_id}`);
+                    continue;
+                }
 
-                // Passamos apenas o 'ag' porque agora esperamos que o nome do profissional 
-                // esteja na própria tabela 'lembretes_final'
                 const msg = await obterMensagemFormatada(ag);
                 const enviado = await enviarMensagemDinamica(ag.telefone, msg, conexao.instance_name, conexao.apikey);
                 
                 if (enviado) {
                     await supabase.from('lembretes_final').update({ status: 'enviado' }).eq('id', ag.id);
-                    console.log(`✅ Sucesso: ${ag.nome}`);
+                    console.log(`✅ Mensagem enviada e status atualizado: ${ag.nome}`);
+                } else {
+                    console.log(`⏳ Falha no envio, tentará novamente no próximo ciclo: ${ag.nome}`);
                 }
             }
         }
     } catch (err) {
-        console.error("🔥 Erro no Vigia:", err.message);
+        console.error("🔥 Erro Crítico no Vigia:", err.message);
     }
 };
 
