@@ -81,49 +81,52 @@ const verificarEEnviarTudo = async () => {
             .select('*')
             .eq('status', 'pendente');
 
-        if (error) {
-            console.error("❌ Erro ao buscar lembretes:", error.message);
-            throw error;
-        }
-
-        if (!lembretes || lembretes.length === 0) {
-            console.log("📭 Nenhum agendamento pendente.");
-            return;
-        }
+        if (error) throw error;
+        if (!lembretes || lembretes.length === 0) return;
 
         for (let ag of lembretes) {
-            // Se for confirmação, envia na hora. Se não, verifica se já chegou o horário.
             const ehConfirmacao = ag.tipo_mensagem === 'confirmacao';
             const jaPassouDaHora = new Date(ag.data_envio) <= agora;
 
             if (ehConfirmacao || jaPassouDaHora) {
-                console.log(`🔎 Processando: ${ag.nome} (${ag.tipo_mensagem})`);
+                
+                // --- NOVA TRAVA DE SEGURANÇA: VERIFICAÇÃO DE EXCLUSÃO ---
+                // Se o Mocha passou o agendamento_id, vamos conferir se ele ainda existe
+                // Nota: Substitua 'NOME_DA_SUA_TABELA_PRINCIPAL' pelo nome real da tabela de agendamentos
+                if (ag.agendamento_id) {
+                    const { data: existeAgendamento } = await supabase
+                        .from('lembretes_final') // <--- AJUSTE O NOME AQUI
+                        .select('id')
+                        .eq('id', ag.agendamento_id)
+                        .maybeSingle();
 
-                // BUSCA A INSTÂNCIA DINÂMICA NO BANCO
-                const { data: conexao, error: connError } = await supabase
+                    if (!existeAgendamento) {
+                        console.log(`🚫 Agendamento ${ag.agendamento_id} não encontrado. Cancelando lembrete.`);
+                        await supabase.from('lembretes_final').update({ status: 'cancelado' }).eq('id', ag.id);
+                        continue; // Pula para o próximo sem enviar
+                    }
+                }
+                // --- FIM DA TRAVA ---
+
+                const { data: conexao } = await supabase
                     .from('usuarios_whatsapp')
                     .select('instance_name, apikey')
                     .eq('user_id', ag.user_id)
-                    .maybeSingle(); // Usamos maybeSingle para não quebrar se não achar
+                    .maybeSingle();
 
-                if (connError || !conexao) {
-                    console.error(`⚠️ Instância não encontrada para o user_id: ${ag.user_id}`);
-                    continue;
-                }
+                if (!conexao) continue;
 
                 const msg = await obterMensagemFormatada(ag);
                 const enviado = await enviarMensagemDinamica(ag.telefone, msg, conexao.instance_name, conexao.apikey);
                 
                 if (enviado) {
                     await supabase.from('lembretes_final').update({ status: 'enviado' }).eq('id', ag.id);
-                    console.log(`✅ Mensagem enviada e status atualizado: ${ag.nome}`);
-                } else {
-                    console.log(`⏳ Falha no envio, tentará novamente no próximo ciclo: ${ag.nome}`);
+                    console.log(`✅ Enviada: ${ag.nome}`);
                 }
             }
         }
     } catch (err) {
-        console.error("🔥 Erro Crítico no Vigia:", err.message);
+        console.error("🔥 Erro no Vigia:", err.message);
     }
 };
 
