@@ -1,14 +1,13 @@
 const express = require('express');
-const cors = require('cors'); // Importado no lugar certo
+const cors = require('cors');
 require('dotenv').config();
 
-const app = express(); // Primeiro criamos o app
+const app = express();
 
-// Agora configuramos o app
-app.use(cors()); // Agora sim o cors funciona!
+app.use(cors());
 app.use(express.json());
 
-// Importações de módulos do projeto (após inicializar o express)
+// Importações
 const whatsappConfig = require('./src/config/whatsapp'); 
 const { verificarEEnviarTudo } = require('./src/services/scheduler');
 const supabase = require('./src/config/db');
@@ -21,103 +20,68 @@ app.post('/webhook', (req, res) => {
     res.status(200).send("OK"); 
 });
 
-// --- ROTA DE ENVIO MANUAL (VIA QUERY) ---
-app.get('/enviar', async (req, res) => {
-    const { numero, mensagem } = req.query;
-    if (!numero || !mensagem) return res.status(400).send("Faltou numero ou mensagem!");
+// --- NOVA ROTA: SALVAR AGENDAMENTO (O que o Mocha precisa!) ---
+app.post('/agendar', async (req, res) => {
+    console.log("📝 Recebendo novo agendamento do Mocha...");
+    const dados = req.body;
 
     try {
-        const axios = require('axios');
-        const cleanNumber = numero.replace(/\D/g, '');
-        const url = `${whatsappConfig.baseUrl}/message/sendText/${whatsappConfig.instance}`;
-        
-        await axios.post(url, {
-            number: cleanNumber,
-            text: mensagem
-        }, { headers: whatsappConfig.headers });
+        const { data, error } = await supabase
+            .from('lembretes_final')
+            .insert([{
+                nome: dados.nome,
+                telefone: dados.telefone,
+                data_envio: dados.data_envio,
+                servico: dados.servico,
+                tipo_mensagem: dados.tipo_mensagem,
+                user_id: dados.user_id,
+                profissional: dados.profissional,
+                status: 'pendente'
+            }])
+            .select();
 
-        res.send(`✅ Mensagem enviada com sucesso para ${cleanNumber}`);
-    } catch (error) {
-        console.error("❌ Erro no envio manual:", error.response?.data || error.message);
-        res.status(500).json({ erro: "Erro no envio manual", detalhe: error.response?.data || error.message });
+        if (error) throw error;
+
+        console.log("✅ Agendamento salvo no Supabase com sucesso!");
+        res.status(201).json({ mensagem: "Agendamento salvo!", data });
+    } catch (err) {
+        console.error("❌ Erro ao salvar agendamento:", err.message);
+        res.status(500).json({ erro: "Erro ao salvar no banco", detalhe: err.message });
     }
 });
 
-// --- ATUALIZAÇÃO DE TEMPLATES ---
-app.post('/templates/update', async (req, res) => {
-    const { slug, novoConteudo } = req.body;
-    
-    if (!slug || !novoConteudo) {
-        return res.status(400).json({ error: "Slug e novoConteudo são obrigatórios." });
-    }
-
-    const { error } = await supabase
-        .from('templates')
-        .update({ conteudo: novoConteudo })
-        .eq('slug', slug);
-
-    if (error) {
-        console.error("❌ Erro ao atualizar template:", error.message);
-        return res.status(500).json(error);
-    }
-    
-    res.json({ message: `Template '${slug}' atualizado com sucesso!` });
+// --- ROTA DE STATUS (CORRIGIDA PARA NÃO DAR ERRO) ---
+app.get('/status', (req, res) => {
+    res.json({ 
+        status: "Servidor FormulaPé Online", 
+        modo: "Multi-Instância Ativo",
+        supabase: "Conectado",
+        timestamp: new Date().toLocaleString('pt-BR')
+    });
 });
 
-// --- ROTA DE DISPARO MANUAL (CHAMADA PELO MOCHA) ---
+// --- ROTA DE DISPARO MANUAL ---
 app.post(['/enviar-agora', '/send-manual'], async (req, res) => {
     console.log("🚨 REQUISIÇÃO MANUAL RECEBIDA!");
     const { agendamentoId } = req.body;
 
-    if (!agendamentoId) {
-        return res.status(400).json({ erro: "ID não fornecido no JSON" });
-    }
+    if (!agendamentoId) return res.status(400).json({ erro: "ID não fornecido" });
 
     try {
-        // Teste de busca antes do update
-        const { data: registro } = await supabase
-            .from('lembretes_final')
-            .select('id, nome')
-            .eq('id', agendamentoId)
-            .single();
-
-        if (!registro) {
-            console.log("❌ ERRO: ID recebido não existe no banco:", agendamentoId);
-            return res.status(404).json({ erro: "Agendamento não encontrado no banco" });
-        }
-
-        console.log(`✅ Registro encontrado: ${registro.nome}. Atualizando status...`);
-
         await supabase
             .from('lembretes_final')
             .update({ status: 'pendente', data_envio: new Date().toISOString() })
             .eq('id', agendamentoId);
 
         await verificarEEnviarTudo();
-        res.json({ mensagem: "Sucesso!" });
-
+        res.json({ mensagem: "Processamento disparado!" });
     } catch (err) {
-        console.error("🔥 Erro na rota manual:", err.message);
         res.status(500).json({ erro: err.message });
     }
 });
 
-// --- ROTA DE STATUS ---
-app.get('/status', (req, res) => {
-    res.json({ 
-        status: "Servidor FormulaPé Online", 
-        instance: whatsappConfig.instance,
-        timestamp: new Date().toLocaleString('pt-BR')
-    });
-});
-
 // --- VIGIA AUTOMÁTICO ---
 console.log("📢 Iniciando vigia de agendamentos...");
-
-// Primeira execução imediata
-verificarEEnviarTudo(); 
-
-// Loop de 1 em 1 minuto
 setInterval(() => {
     verificarEEnviarTudo();
 }, 60 * 1000); 
