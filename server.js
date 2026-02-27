@@ -29,7 +29,6 @@ app.post('/agendar', async (req, res) => {
         const { data, error } = await supabase
             .from('lembretes_final')
             .insert([{
-                nome: dados.nome,
                 telefone: dados.telefone,
                 data_envio: dados.data_envio,
                 servico: dados.servico,
