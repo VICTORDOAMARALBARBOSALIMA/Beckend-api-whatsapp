@@ -94,3 +94,13 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Servidor rodando na porta ${PORT}`);
 });
+
+// Função Utilitária para formatar mensagens (Placeholders)
+function formatarMensagemCustomizada(template, dados) {
+    if (!template) return null;
+    return template
+        .replace(/{{nome}}/g, dados.nome_cliente || "Cliente")
+        .replace(/{{data}}/g, dados.data_agendamento || "")
+        .replace(/{{servico}}/g, dados.servico || "procedimento")
+        .replace(/{{profissional}}/g, dados.profissional || "");
+}

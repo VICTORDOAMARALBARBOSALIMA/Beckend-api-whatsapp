@@ -32,26 +32,45 @@ async function enviarMensagemDinamica(numero, texto, instancia, apikey) {
 }
 
 async function obterMensagemFormatada(agendamento) {
-    const templatesFixos = {
+    // 1. Definição do Fallback (Caso não exista template no banco)
+    const templatesPadrao = {
         'confirmacao': "Olá {nome}!👋 Seu agendamento foi confirmado para o dia {data} às {hora}. Atenciosamente, {profissional}",
         'lembrete_24h': "Olá {nome}!👋 Lembramos que você tem um atendimento agendado para amanhã, dia {data} às {hora}. Atenciosamente, {profissional}",
-        'pos_venda': "Olá {nome}!👋 Esperamos que você esteja bem após sua consulta! Atenciosamente, {profissional}"
+        'Pos-Atendimento': "Olá {nome}!👋 Esperamos que você esteja bem após sua consulta! Atenciosamente, {profissional}"
     };
 
-    let textoBase = agendamento.mensagem_personalizada || templatesFixos[agendamento.tipo_mensagem] || templatesFixos['confirmacao'];
+    let textoBase = null;
 
+    try {
+        // 2. BUSCA DINÂMICA NA TABELA 'templates'
+        const { data: templateBanco } = await supabase
+            .from('templates')
+            .select('content')
+            .eq('user_id', agendamento.user_id)
+            .eq('slug', agendamento.tipo_mensagem)
+            .maybeSingle();
+
+        // 3. PRIORIDADE: Banco > Mensagem Personalizada do Agendamento > Padrão Fixo
+        textoBase = templateBanco?.content || agendamento.mensagem_personalizada || templatesPadrao[agendamento.tipo_mensagem] || templatesPadrao['confirmacao'];
+
+    } catch (error) {
+        console.error("⚠️ Erro ao buscar template no banco, usando padrão.", error.message);
+        textoBase = templatesPadrao[agendamento.tipo_mensagem] || templatesPadrao['confirmacao'];
+    }
+
+    // 4. FORMATAÇÃO DE DATA E HORA
     const dataExibicao = new Date(agendamento.data_envio);
     const dataF = dataExibicao.toLocaleDateString('pt-BR');
     const horaF = dataExibicao.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
+    // 5. REPLACE DAS VARIÁVEIS (Suporta tanto {nome} quanto {{nome}})
     return textoBase
-        .replace(/{nome}/g, agendamento.nome || 'Cliente')
-        .replace(/{data}/g, dataF)
-        .replace(/{hora}/g, horaF)
-        .replace(/{servico}/g, agendamento.servico || 'atendimento')
-        .replace(/{profissional}|{Profissão}/g, agendamento.profissional || 'Equipe FormulaPé');
+        .replace(/{nome}|{{nome}}/g, agendamento.nome || 'Cliente')
+        .replace(/{data}|{{data}}/g, dataF)
+        .replace(/{hora}|{{hora}}/g, horaF)
+        .replace(/{servico}|{{servico}}/g, agendamento.servico || 'atendimento')
+        .replace(/{profissional}|{{profissional}}|{Profissão}/g, agendamento.profissional || 'Equipe FormulaPé');
 }
-
 const verificarEEnviarTudo = async () => {
     const agora = new Date();
     console.log(`--- 🕵️ VIGIA ATIVADO [${agora.toLocaleString('pt-BR')}] ---`);
