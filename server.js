@@ -85,6 +85,11 @@ setInterval(() => {
     verificarEEnviarTudo();
 }, 60 * 1000); 
 
+// Rota de saúde para o Mocha parar de dar 404
+app.get('/', (req, res) => {
+    res.status(200).json({ status: "online", message: "Robô operando normalmente" });
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Servidor rodando na porta ${PORT}`);
