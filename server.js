@@ -44,6 +44,7 @@ app.post('/agendar', async (req, res) => {
                 agendamento_id: dados.agendamento_id,
                 telefone: dados.telefone,
                 data_envio: dados.data_envio,
+                data_atendimento: dados.data_hora,
                 servico: dados.servico,
                 tipo_mensagem: dados.tipo_mensagem,
                 user_id: dados.user_id,

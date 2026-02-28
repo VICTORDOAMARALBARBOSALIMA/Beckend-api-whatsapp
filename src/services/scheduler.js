@@ -68,7 +68,7 @@ async function obterMensagemFormatada(agendamento) {
         textoBase = templatesPadrao[agendamento.tipo_mensagem] || templatesPadrao['confirmacao'];
     }
 
-    const dataExibicao = new Date(agendamento.data_envio);
+    const dataExibicao = new Date(agendamento.data_atendimento || agendamento.data_envio);
     const dataF = dataExibicao.toLocaleDateString('pt-BR');
     const horaF = dataExibicao.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
