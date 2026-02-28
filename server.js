@@ -21,29 +21,40 @@ app.post('/webhook', (req, res) => {
 });
 
 // --- ROTA DE SALVAR AGENDAMENTO (CORRIGIDA) ---
+// --- ROTA DE SALVAR AGENDAMENTO (VERSÃO BLINDADA) ---
 app.post('/agendar', async (req, res) => {
     console.log("📝 Recebendo novo agendamento do Mocha...");
     const dados = req.body;
+    const agora = new Date();
+    const dataEnvioRecebida = new Date(dados.data_envio);
+
+    // TRAVA DE SEGURANÇA: Se a data de envio já passou, nasce cancelado
+    let statusInicial = 'pendente';
+    if (dataEnvioRecebida < agora) {
+        console.warn(`⚠️ Data de envio (${dados.data_envio}) está no passado. Marcando como cancelado.`);
+        statusInicial = 'cancelado';
+    }
 
     try {
         const { data, error } = await supabase
             .from('lembretes_final')
             .insert([{
-                agendamento_id: dados.agendamento_id, // <-- ADICIONADO (A CHAVE DO SUCESSO!)
+                agendamento_id: dados.agendamento_id,
                 telefone: dados.telefone,
                 data_envio: dados.data_envio,
                 servico: dados.servico,
                 tipo_mensagem: dados.tipo_mensagem,
                 user_id: dados.user_id,
                 profissional: dados.profissional,
-                status: 'pendente'
+                nome: dados.nome, // Certifique-se que o Mocha envia o nome
+                status: statusInicial // <--- Agora ele usa a nossa trava!
             }])
             .select();
 
         if (error) throw error;
 
-        console.log(`✅ Agendamento salvo! ID: ${dados.agendamento_id} | Paciente: ${dados.nome}`);
-        res.status(201).json({ mensagem: "Agendamento salvo!", data });
+        console.log(`✅ Agendamento salvo! ID: ${dados.agendamento_id} | Status: ${statusInicial}`);
+        res.status(201).json({ mensagem: "Agendamento processado!", status: statusInicial });
     } catch (err) {
         console.error("❌ Erro ao salvar agendamento:", err.message);
         res.status(500).json({ erro: "Erro ao salvar no banco", detalhe: err.message });
