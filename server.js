@@ -20,18 +20,20 @@ app.post('/webhook', (req, res) => {
     res.status(200).send("OK"); 
 });
 
-// --- ROTA DE SALVAR AGENDAMENTO (CORRIGIDA) ---
-// --- ROTA DE SALVAR AGENDAMENTO (VERSÃO BLINDADA) ---
+// --- ROTA DE SALVAR AGENDAMENTO  ---
 app.post('/agendar', async (req, res) => {
     console.log("📝 Recebendo novo agendamento do Mocha...");
     const dados = req.body;
-    const agora = new Date();
-    const dataEnvioRecebida = new Date(dados.data_envio);
+    
+    // Pegamos o timestamp em milissegundos para uma comparação bruta e justa
+    const agoraMS = Date.now(); 
+    const dataEnvioMS = new Date(dados.data_envio).getTime();
 
-    // TRAVA DE SEGURANÇA: Se a data de envio já passou, nasce cancelado
+    // Damos uma tolerância de 5 minutos (300.000 ms) para evitar erros de sincronia
     let statusInicial = 'pendente';
-    if (dataEnvioRecebida < agora) {
-        console.warn(`⚠️ Data de envio (${dados.data_envio}) está no passado. Marcando como cancelado.`);
+    
+    if (dataEnvioMS < (agoraMS - 300000)) { 
+        console.warn(`⚠️ Data de envio (${dados.data_envio}) está realmente no passado. Marcando como cancelado.`);
         statusInicial = 'cancelado';
     }
 
