@@ -20,7 +20,7 @@ app.post('/webhook', (req, res) => {
     res.status(200).send("OK"); 
 });
 
-// --- NOVA ROTA: SALVAR AGENDAMENTO (O que o Mocha precisa!) ---
+// --- ROTA DE SALVAR AGENDAMENTO (CORRIGIDA) ---
 app.post('/agendar', async (req, res) => {
     console.log("📝 Recebendo novo agendamento do Mocha...");
     const dados = req.body;
@@ -29,6 +29,7 @@ app.post('/agendar', async (req, res) => {
         const { data, error } = await supabase
             .from('lembretes_final')
             .insert([{
+                agendamento_id: dados.agendamento_id, // <-- ADICIONADO (A CHAVE DO SUCESSO!)
                 telefone: dados.telefone,
                 data_envio: dados.data_envio,
                 servico: dados.servico,
@@ -41,7 +42,7 @@ app.post('/agendar', async (req, res) => {
 
         if (error) throw error;
 
-        console.log("✅ Agendamento salvo no Supabase com sucesso!");
+        console.log(`✅ Agendamento salvo! ID: ${dados.agendamento_id} | Paciente: ${dados.nome}`);
         res.status(201).json({ mensagem: "Agendamento salvo!", data });
     } catch (err) {
         console.error("❌ Erro ao salvar agendamento:", err.message);
