@@ -111,8 +111,8 @@ app.listen(PORT, '0.0.0.0', () => {
 function formatarMensagemCustomizada(template, dados) {
     if (!template) return null;
     return template
-        .replace(/{{nome}}/g, dados.nome_cliente || "Cliente")
+        .replace(/{{nome}}/g, dados.nome_cliente || "")
         .replace(/{{data}}/g, dados.data_agendamento || "")
-        .replace(/{{servico}}/g, dados.servico || "procedimento")
+        .replace(/{{servico}}/g, dados.servico || "")
         .replace(/{{profissional}}/g, dados.profissional || "");
 }
