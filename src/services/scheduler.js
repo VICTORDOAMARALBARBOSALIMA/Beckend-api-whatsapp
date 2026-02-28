@@ -90,22 +90,33 @@ const verificarEEnviarTudo = async () => {
 
             if (ehConfirmacao || jaPassouDaHora) {
                 
-                // --- NOVA TRAVA DE SEGURANÇA: VERIFICAÇÃO DE EXCLUSÃO ---
-                // Se o Mocha passou o agendamento_id, vamos conferir se ele ainda existe
-                // Nota: Substitua 'NOME_DA_SUA_TABELA_PRINCIPAL' pelo nome real da tabela de agendamentos
-                if (ag.agendamento_id) {
-                    const { data: existeAgendamento } = await supabase
-                        .from('lembretes_final') // <--- AJUSTE O NOME AQUI
-                        .select('id')
-                        .eq('id', ag.agendamento_id)
-                        .maybeSingle();
+             // --- NOVA TRAVA DE SEGURANÇA: VERIFICAÇÃO DE EXCLUSÃO ---
+if (ag.agendamento_id) {
+    // 1. IGNORA CANCELAMENTO SE FOR TESTE MANUAL
+    if (String(ag.agendamento_id).startsWith('TESTE_')) {
+        console.log(`🧪 ID de Teste detectado (${ag.agendamento_id}). Ignorando verificação.`);
+    } else {
+        // 2. VERIFICA NA TABELA REAL (Substitua 'agenda' pelo nome real da sua tabela de atendimentos)
+        const { data: existeAgendamento } = await supabase
+            .from('agenda') 
+            .select('id')
+            .eq('id', ag.agendamento_id)
+            .maybeSingle();
 
-                    if (!existeAgendamento) {
-                        console.log(`🚫 Agendamento ${ag.agendamento_id} não encontrado. Cancelando lembrete.`);
-                        await supabase.from('lembretes_final').update({ status: 'cancelado' }).eq('id', ag.id);
-                        continue; // Pula para o próximo sem enviar
-                    }
-                }
+        if (!existeAgendamento) {
+            console.log(`🚫 Agendamento ${ag.agendamento_id} não encontrado. Cancelando TODOS os lembretes deste ID.`);
+            
+            // Cancela o lembrete atual, o de 24h e o de Pós-Atendimento de uma vez
+            await supabase
+                .from('lembretes_final')
+                .update({ status: 'cancelado' })
+                .eq('agendamento_id', ag.agendamento_id)
+                .eq('status', 'pendente');
+                
+            continue; 
+        }
+    }
+}
                 // --- FIM DA TRAVA ---
 
                 const { data: conexao } = await supabase
