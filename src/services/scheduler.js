@@ -5,7 +5,7 @@ const axios = require('axios');
 async function enviarMensagemDinamica(numero, texto, instancia, apikey) {
     const numeroLimpo = numero.toString().replace(/\D/g, '');
     try {
-        const baseUrl = process.env.EVOLUTION_URL || "https://api.formulape.app.br"; // Backup caso a env falhe
+        const baseUrl = process.env.EVOLUTION_URL || "https://api.formulape.app.br"; 
         
         const urlBaseLimpa = baseUrl.replace(/\/$/, ""); 
         const url = `${urlBaseLimpa}/message/sendText/${encodeURIComponent(instancia)}`;        
@@ -31,18 +31,17 @@ async function enviarMensagemDinamica(numero, texto, instancia, apikey) {
     }
 }
 
+// --- FORMATAÇÃO DE MENSAGENS ---
 async function obterMensagemFormatada(agendamento) {
-    // 1. Definição do Fallback (Caso não exista template no banco)
     const templatesPadrao = {
         'confirmacao': "Olá {nome}!👋 Seu agendamento foi confirmado para o dia {data} às {hora}. Atenciosamente, {profissional}",
-        'lembrete_24h': "Olá {nome}!👋 Lembramos que você tem um atendimento agendado para amanhã, dia {data} às {hora}. Atenciosamente, {profissional}",
+        'lembrete_5h': "Olá {nome}!👋 Lembramos que você tem um atendimento agendado para hoje, dia {data} às {hora}. Atenciosamente, {profissional}",
         'Pos-Atendimento': "Olá {nome}!👋 Esperamos que você esteja bem após sua consulta! Atenciosamente, {profissional}"
     };
 
     let textoBase = null;
 
     try {
-        // 2. BUSCA DINÂMICA NA TABELA 'templates'
         const { data: templateBanco } = await supabase
             .from('templates')
             .select('content')
@@ -50,7 +49,6 @@ async function obterMensagemFormatada(agendamento) {
             .eq('slug', agendamento.tipo_mensagem)
             .maybeSingle();
 
-        // 3. PRIORIDADE: Banco > Mensagem Personalizada do Agendamento > Padrão Fixo
         textoBase = templateBanco?.content || agendamento.mensagem_personalizada || templatesPadrao[agendamento.tipo_mensagem] || templatesPadrao['confirmacao'];
 
     } catch (error) {
@@ -58,12 +56,10 @@ async function obterMensagemFormatada(agendamento) {
         textoBase = templatesPadrao[agendamento.tipo_mensagem] || templatesPadrao['confirmacao'];
     }
 
-    // 4. FORMATAÇÃO DE DATA E HORA
     const dataExibicao = new Date(agendamento.data_envio);
     const dataF = dataExibicao.toLocaleDateString('pt-BR');
     const horaF = dataExibicao.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-    // 5. REPLACE DAS VARIÁVEIS (Suporta tanto {nome} quanto {{nome}})
     return textoBase
         .replace(/{nome}|{{nome}}/g, agendamento.nome || 'Cliente')
         .replace(/{data}|{{data}}/g, dataF)
@@ -71,11 +67,14 @@ async function obterMensagemFormatada(agendamento) {
         .replace(/{servico}|{{servico}}/g, agendamento.servico || 'atendimento')
         .replace(/{profissional}|{{profissional}}|{Profissão}/g, agendamento.profissional || 'Equipe FormulaPé');
 }
+
+// --- VIGIA E PROCESSAMENTO DE FILA ---
 const verificarEEnviarTudo = async () => {
     const agora = new Date();
     console.log(`--- 🕵️ VIGIA ATIVADO [${agora.toLocaleString('pt-BR')}] ---`);
 
     try {
+        // Busca apenas o que está pendente (A fila oficial)
         const { data: lembretes, error } = await supabase
             .from('lembretes_final') 
             .select('*')
@@ -88,37 +87,10 @@ const verificarEEnviarTudo = async () => {
             const ehConfirmacao = ag.tipo_mensagem === 'confirmacao';
             const jaPassouDaHora = new Date(ag.data_envio) <= agora;
 
+            // Se for Confirmação imediata ou se a hora agendada já chegou/passou
             if (ehConfirmacao || jaPassouDaHora) {
                 
-             // --- NOVA TRAVA DE SEGURANÇA: VERIFICAÇÃO DE EXCLUSÃO ---
-if (ag.agendamento_id) {
-    // 1. IGNORA CANCELAMENTO SE FOR TESTE MANUAL
-    if (String(ag.agendamento_id).startsWith('TESTE_')) {
-        console.log(`🧪 ID de Teste detectado (${ag.agendamento_id}). Ignorando verificação.`);
-    } else {
-        // 2. VERIFICA NA TABELA REAL (Substitua 'agenda' pelo nome real da sua tabela de atendimentos)
-        const { data: existeAgendamento } = await supabase
-            .from('lembretes_final') 
-            .select('id')
-            .eq('agendamento_id', ag.agendamento_id) // <--- BUSCAR PELA COLUNA agendamento_id
-            .maybeSingle();
-
-        if (!existeAgendamento) {
-            console.log(`🚫 Agendamento ${ag.agendamento_id} não encontrado. Cancelando TODOS os lembretes deste ID.`);
-            
-            // Cancela o lembrete atual, o de 24h e o de Pós-Atendimento de uma vez
-            await supabase
-                .from('lembretes_final')
-                .update({ status: 'cancelado' })
-                .eq('agendamento_id', ag.agendamento_id)
-                .eq('status', 'pendente');
-                
-            continue; 
-        }
-    }
-}
-                // --- FIM DA TRAVA ---
-
+                // 1. Pega os dados de conexão do usuário no WhatsApp
                 const { data: conexao } = await supabase
                     .from('usuarios_whatsapp')
                     .select('instance_name, apikey')
@@ -127,12 +99,14 @@ if (ag.agendamento_id) {
 
                 if (!conexao) continue;
 
+                // 2. Formata e Envia
                 const msg = await obterMensagemFormatada(ag);
                 const enviado = await enviarMensagemDinamica(ag.telefone, msg, conexao.instance_name, conexao.apikey);
                 
+                // 3. Atualiza o status se deu certo
                 if (enviado) {
                     await supabase.from('lembretes_final').update({ status: 'enviado' }).eq('id', ag.id);
-                    console.log(`✅ Enviada: ${ag.nome}`);
+                    console.log(`✅ Enviada: ${ag.nome} (${ag.tipo_mensagem})`);
                 }
             }
         }
