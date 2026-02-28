@@ -73,11 +73,11 @@ async function obterMensagemFormatada(agendamento) {
     const horaF = dataExibicao.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
     return textoBase
-        .replace(/{nome}|{{nome}}/g, agendamento.nome || 'Cliente')
+        .replace(/{nome}|{{nome}}/g, agendamento.nome)
         .replace(/{data}|{{data}}/g, dataF)
         .replace(/{hora}|{{hora}}/g, horaF)
-        .replace(/{servico}|{{servico}}/g, agendamento.servico || 'atendimento')
-        .replace(/{profissional}|{{profissional}}|{Profissão}/g, agendamento.profissional || 'Equipe FormulaPé');
+        .replace(/{servico}|{{servico}}/g, agendamento.servico)
+        .replace(/{profissional}|{{profissional}}|{Profissão}/g, agendamento.profissional);
 }
 
 // --- VIGIA E PROCESSAMENTO DE FILA ---
