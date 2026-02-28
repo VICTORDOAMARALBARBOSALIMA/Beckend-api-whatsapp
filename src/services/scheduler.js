@@ -23,10 +23,22 @@ async function enviarMensagemDinamica(numero, texto, instancia, apikey) {
         });
         return true;
 
-    } catch (error) {
-        console.error(`❌ Erro na Evolution (${instancia}):`, error.response?.data || error.message);
-        // Se der erro de "já enviado" ou algo do tipo, marcamos como sucesso para não travar o loop
-        if (error.response?.status === 400 || error.response?.status === 409) return true;
+   } catch (error) {
+        // Pega a mensagem de erro real da Evolution
+        const erroReal = error.response?.data?.message || error.response?.data?.error || error.message;
+        console.error(`❌ Erro na Evolution (${instancia}):`, erroReal);
+
+        // Se o erro for "Nenhuma sessão", "Instância não encontrada" ou 404
+        // NÃO retornamos true. Retornamos false para ele continuar 'pendente'.
+        if (JSON.stringify(erroReal).includes('SessionError') || error.response?.status === 404) {
+            console.warn("⚠️ A instância no banco não bate com a instância na API. Verifique o nome!");
+            return false; 
+        }
+
+        // Apenas em erros de conflito (409) ou dados inválidos (400) que não sejam de sessão
+        // marcamos como true para não travar o robô em números inexistentes.
+        if (error.response?.status === 409) return true;
+
         return false;
     }
 }
