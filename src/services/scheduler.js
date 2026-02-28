@@ -98,9 +98,9 @@ if (ag.agendamento_id) {
     } else {
         // 2. VERIFICA NA TABELA REAL (Substitua 'agenda' pelo nome real da sua tabela de atendimentos)
         const { data: existeAgendamento } = await supabase
-            .from('agenda') 
+            .from('lembretes_final') 
             .select('id')
-            .eq('id', ag.agendamento_id)
+            .eq('agendamento_id', ag.agendamento_id) // <--- BUSCAR PELA COLUNA agendamento_id
             .maybeSingle();
 
         if (!existeAgendamento) {
