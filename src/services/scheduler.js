@@ -46,7 +46,7 @@ async function enviarMensagemDinamica(numero, texto, instancia, apikey) {
 // --- FORMATAÇÃO DE MENSAGENS ---
 async function obterMensagemFormatada(agendamento) {
     const templatesPadrao = {
-        'confirmacao': "Olá {nome}!👋 Seu agendamento foi confirmado para o dia {data} às {hora}. Atenciosamente, {profissional}",
+        'confirmacao': "Olá {nome}!👋 Seu agendamento foi realizado para o dia {data} às {hora}. Atenciosamente, {profissional}",
         'lembrete_5h': "Olá {nome}!👋 Lembramos que você tem um atendimento agendado para hoje, dia {data} às {hora}. Atenciosamente, {profissional}",
         'Pos-Atendimento': "Olá {nome}!👋 Esperamos que você esteja bem após sua consulta! Atenciosamente, {profissional}"
     };
