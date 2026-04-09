@@ -3,41 +3,51 @@ const axios = require('axios');
 
 // --- ENVIO DINÂMICO PARA EVOLUTION API ---
 async function enviarMensagemDinamica(numero, texto, instancia, apikey) {
-    const numeroLimpo = numero.toString().replace(/\D/g, '');
+    // 1. Garante que o número tenha o 55 e não tenha o caractere '+'
+    let numeroLimpo = numero.toString().replace(/\D/g, '');
+    if (!numeroLimpo.startsWith('55') && numeroLimpo.length <= 11) {
+        numeroLimpo = '55' + numeroLimpo;
+    }
+
     try {
-        const baseUrl = process.env.EVOLUTION_URL || "https://api.formulape.app.br"; 
-        
+        const baseUrl = process.env.EVOLUTION_URL || "https://api.formulape.app.br";
         const urlBaseLimpa = baseUrl.replace(/\/$/, ""); 
         const url = `${urlBaseLimpa}/message/sendText/${encodeURIComponent(instancia)}`;        
         
+        // 2. Payload Híbrido (Funciona na maioria das versões)
         const payload = {
-            number: numeroLimpo,
-            textMessage: { text: texto },
-            options: { delay: 1200, presence: "composing", linkPreview: false }
+            "number": numeroLimpo,
+            "text": texto, // Para v1
+            "textMessage": { "text": texto }, // Para v2
+            "options": {
+                "delay": 1200,
+                "presence": "composing",
+                "linkPreview": false
+            }
         };
 
-        console.log(`📡 Tentando enviar via Evolution: ${instancia}`);
+        console.log(`📡 Enviando para: ${numeroLimpo} na instância: ${instancia}`);
 
-        await axios.post(url, payload, { 
-            headers: { "apikey": apikey, "Content-Type": "application/json" } 
+        const response = await axios.post(url, payload, { 
+            headers: { 
+                "apikey": apikey, 
+                "Content-Type": "application/json" 
+            } 
         });
+
         return true;
 
-   } catch (error) {
-        // Pega a mensagem de erro real da Evolution
-        const erroReal = error.response?.data?.message || error.response?.data?.error || error.message;
-        console.error(`❌ Erro na Evolution (${instancia}):`, erroReal);
-
-        // Se o erro for "Nenhuma sessão", "Instância não encontrada" ou 404
-        // NÃO retornamos true. Retornamos false para ele continuar 'pendente'.
-        if (JSON.stringify(erroReal).includes('SessionError') || error.response?.status === 404) {
-            console.warn("⚠️ A instância no banco não bate com a instância na API. Verifique o nome!");
-            return false; 
+    } catch (error) {
+        // Log detalhado para você ver EXATAMENTE o que a Evolution respondeu
+        if (error.response) {
+            console.error(`❌ Erro 400 na Evolution. Detalhes:`, JSON.stringify(error.response.data));
+        } else {
+            console.error(`❌ Erro na conexão:`, error.message);
         }
 
-        // Apenas em erros de conflito (409) ou dados inválidos (400) que não sejam de sessão
-        // marcamos como true para não travar o robô em números inexistentes.
-        if (error.response?.status === 409) return true;
+        // Se o erro for 400, pode ser número que não é WhatsApp. 
+        // Em alguns casos é melhor marcar como enviado para não travar a fila.
+        if (error.response?.status === 400) return true; 
 
         return false;
     }
